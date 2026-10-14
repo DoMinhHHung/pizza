@@ -1,0 +1,46 @@
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+secrets/
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+certs/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+
+# Test and coverage output
+coverage/
+coverage.out
+*.coverprofile
+
+# Common build artifacts
+dist/
+build/
+out/
+
+# Local database files and runtime data
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Local-only Docker Compose override
+docker-compose.override.yml
