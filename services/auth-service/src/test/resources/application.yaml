@@ -31,6 +31,14 @@ spring:
           auth: false
           starttls:
             enable: false
+
+management:
+  health:
+    mail:
+      enabled: false
+    redis:
+      enabled: false
+
 app:
   jwt:
     secret: test-jwt-secret-key-at-least-32-characters-long
