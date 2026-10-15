@@ -1,9 +1,7 @@
 package com.pizza.auth.dto;
 
 import java.util.UUID;
-
 import com.pizza.auth.user.AccountStatus;
-
 import lombok.Getter;
 
 @Getter

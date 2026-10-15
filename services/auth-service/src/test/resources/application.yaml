@@ -4,7 +4,6 @@ spring:
     username: sa
     password:
     driver-class-name: org.h2.Driver
-
   jpa:
     open-in-view: false
     hibernate:
@@ -14,20 +13,44 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
         jdbc:
           time_zone: UTC
-
   flyway:
     enabled: true
     locations: classpath:db/migration
-
-  spring:
-    data:
-      redis:
-        url: ${SPRING_DATA_REDIS_URL:}
-        password: ${SPRING_DATA_REDIS_PASSWORD:}
-        timeout: 2000ms
-
-  app:
-    jwt:
-      secret: ${JWT_SECRET:}
-      access-token-expiration: 30m
-      refresh-token-expiration: 7d
+  data:
+    redis:
+      url: redis://localhost:6379
+      timeout: 2000ms
+  mail:
+    host: localhost
+    port: 1025
+    username: test
+    password: test
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+app:
+  jwt:
+    secret: test-jwt-secret-key-at-least-32-characters-long
+    access-token-expiration: 30m
+    refresh-token-expiration: 7d
+  security:
+    max-failed-attempts: 5
+    lock-duration: 30m
+    verification-token-ttl: 24h
+    reset-token-ttl: 1h
+    rate-limit:
+      login-requests: 100
+      login-window: 1m
+      register-requests: 100
+      register-window: 1m
+      forgot-password-requests: 100
+      forgot-password-window: 1m
+  mail:
+    from: noreply@pizza.test
+    base-url: http://localhost:8080
+  cors:
+    allowed-origins: http://localhost:3000
+    allowed-headers: Authorization,Content-Type

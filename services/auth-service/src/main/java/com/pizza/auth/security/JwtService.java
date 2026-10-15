@@ -1,7 +1,6 @@
 package com.pizza.auth.security;
 
 import com.pizza.auth.config.JwtProperties;
-import com.pizza.auth.user.AccountStatus;
 import com.pizza.auth.user.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -21,7 +20,6 @@ public class JwtService {
 
     public JwtService(JwtProperties jwtProperties) {
         this.jwtProperties = jwtProperties;
-
         String secret = jwtProperties.getSecret();
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException(
@@ -31,14 +29,12 @@ public class JwtService {
             throw new IllegalStateException(
                     "JWT_SECRET is too short. It must be at least 32 characters long.");
         }
-
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateAccessToken(User user, String jti) {
         Instant now = Instant.now();
         Instant expiry = now.plus(jwtProperties.getAccessTokenExpiration());
-
         return Jwts.builder()
                 .id(jti)
                 .subject(user.getId().toString())
@@ -54,7 +50,6 @@ public class JwtService {
     public String generateRefreshToken(User user, String jti) {
         Instant now = Instant.now();
         Instant expiry = now.plus(jwtProperties.getRefreshTokenExpiration());
-
         return Jwts.builder()
                 .id(jti)
                 .subject(user.getId().toString())

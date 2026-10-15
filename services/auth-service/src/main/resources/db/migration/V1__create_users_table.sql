@@ -8,8 +8,6 @@ CREATE TABLE users (
     locked_until        TIMESTAMP WITH TIME ZONE,
     created_at          TIMESTAMP WITH TIME ZONE     NOT NULL,
     updated_at          TIMESTAMP WITH TIME ZONE     NOT NULL,
-
     CONSTRAINT uq_users_email UNIQUE (email)
 );
-
 CREATE INDEX idx_users_status ON users (status);

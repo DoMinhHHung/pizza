@@ -1,10 +1,20 @@
 package com.pizza.auth.service;
 
+import com.pizza.auth.dto.ChangePasswordRequest;
 import com.pizza.auth.dto.RegisterRequest;
 import com.pizza.auth.dto.RegisterResponse;
+import com.pizza.auth.dto.UserResponse;
 import com.pizza.auth.exception.EmailAlreadyExistsException;
+import com.pizza.auth.exception.InvalidCurrentPasswordException;
+import com.pizza.auth.exception.InvalidTokenException;
+import com.pizza.auth.security.RefreshTokenService;
+import com.pizza.auth.security.VerificationTokenService;
+import com.pizza.auth.user.AccountStatus;
 import com.pizza.auth.user.User;
 import com.pizza.auth.user.UserRepository;
+import java.time.Instant;
+import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,10 +24,20 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final VerificationTokenService verificationTokenService;
+    private final EmailService emailService;
+    private final RefreshTokenService refreshTokenService;
 
-    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserServiceImpl(UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            VerificationTokenService verificationTokenService,
+            EmailService emailService,
+            RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.verificationTokenService = verificationTokenService;
+        this.emailService = emailService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Override
@@ -30,14 +50,78 @@ public class UserServiceImpl implements UserService {
         }
 
         String passwordHash = passwordEncoder.encode(request.getPassword());
-
         User user = new User(normalizedEmail, passwordHash, request.getFullName().trim());
-        User saved = userRepository.save(user);
 
-        return new RegisterResponse(
-                saved.getId(),
-                saved.getEmail(),
-                saved.getFullName(),
-                saved.getStatus());
+        try {
+            User saved = userRepository.save(user);
+            String token = verificationTokenService.create(saved.getId());
+            emailService.sendVerificationEmail(saved.getEmail(), token);
+            return new RegisterResponse(
+                    saved.getId(),
+                    saved.getEmail(),
+                    saved.getFullName(),
+                    saved.getStatus());
+        } catch (DataIntegrityViolationException ex) {
+            throw new EmailAlreadyExistsException(normalizedEmail);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void verifyEmail(String token) {
+        UUID userId = verificationTokenService.consume(token)
+                .orElseThrow(() -> new InvalidTokenException("Invalid or expired verification token"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InvalidTokenException("User not found"));
+
+        if (user.getStatus() == AccountStatus.ACTIVE && user.getEmailVerifiedAt() != null) {
+            return;
+        }
+
+        user.setStatus(AccountStatus.ACTIVE);
+        user.setEmailVerifiedAt(Instant.now());
+        userRepository.save(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void resendVerification(String email) {
+        String normalized = email.trim().toLowerCase();
+        User user = userRepository.findByEmail(normalized).orElse(null);
+        if (user == null || user.getStatus() == AccountStatus.ACTIVE) {
+            return;
+        }
+        String token = verificationTokenService.create(user.getId());
+        emailService.sendVerificationEmail(user.getEmail(), token);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InvalidTokenException("User not found"));
+        return new UserResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getStatus(),
+                user.getEmailVerifiedAt(),
+                user.getCreatedAt());
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(UUID userId, ChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InvalidTokenException("User not found"));
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            throw new InvalidCurrentPasswordException();
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        refreshTokenService.revokeAllForUser(userId);
     }
 }

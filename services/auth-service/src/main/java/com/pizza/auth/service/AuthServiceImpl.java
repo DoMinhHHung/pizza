@@ -1,25 +1,30 @@
 package com.pizza.auth.service;
 
-import java.util.UUID;
-
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import com.pizza.auth.config.JwtProperties;
+import com.pizza.auth.config.SecurityProperties;
+import com.pizza.auth.dto.ForgotPasswordRequest;
 import com.pizza.auth.dto.LoginRequest;
 import com.pizza.auth.dto.RefreshRequest;
+import com.pizza.auth.dto.ResetPasswordRequest;
 import com.pizza.auth.dto.TokenResponse;
+import com.pizza.auth.exception.AccountLockedException;
 import com.pizza.auth.exception.InvalidCredentialsException;
 import com.pizza.auth.exception.InvalidTokenException;
 import com.pizza.auth.security.JwtService;
+import com.pizza.auth.security.LoginAttemptService;
+import com.pizza.auth.security.PasswordResetTokenService;
 import com.pizza.auth.security.RefreshTokenService;
 import com.pizza.auth.security.TokenBlacklistService;
 import com.pizza.auth.user.AccountStatus;
 import com.pizza.auth.user.User;
 import com.pizza.auth.user.UserRepository;
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
+import java.time.Instant;
+import java.util.UUID;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -29,36 +34,78 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final LoginAttemptService loginAttemptService;
+    private final PasswordResetTokenService passwordResetTokenService;
+    private final EmailService emailService;
+    private final JwtProperties jwtProperties;
+    private final SecurityProperties securityProperties;
 
     public AuthServiceImpl(UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             RefreshTokenService refreshTokenService,
-            TokenBlacklistService tokenBlacklistService) {
+            TokenBlacklistService tokenBlacklistService,
+            LoginAttemptService loginAttemptService,
+            PasswordResetTokenService passwordResetTokenService,
+            EmailService emailService,
+            JwtProperties jwtProperties,
+            SecurityProperties securityProperties) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.loginAttemptService = loginAttemptService;
+        this.passwordResetTokenService = passwordResetTokenService;
+        this.emailService = emailService;
+        this.jwtProperties = jwtProperties;
+        this.securityProperties = securityProperties;
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public TokenResponse login(LoginRequest request) {
         String email = request.getEmail().trim().toLowerCase();
 
+        if (loginAttemptService.isLocked(email)) {
+            throw new AccountLockedException();
+        }
+
         User user = userRepository.findByEmail(email)
-                .orElseThrow(InvalidCredentialsException::new);
+                .orElseThrow(() -> {
+                    loginAttemptService.recordFailure(email);
+                    return new InvalidCredentialsException();
+                });
+
+        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now())) {
+            throw new AccountLockedException();
+        }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            loginAttemptService.recordFailure(email);
+            if (loginAttemptService.isLocked(email)) {
+                user.setLockedUntil(Instant.now().plus(securityProperties.getLockDuration()));
+                user.setStatus(AccountStatus.LOCKED);
+                userRepository.save(user);
+            }
             throw new InvalidCredentialsException();
         }
 
-        if (user.getStatus() != AccountStatus.ACTIVE
-                && user.getStatus() != AccountStatus.PENDING_VERIFICATION) {
+        if (user.getStatus() == AccountStatus.DISABLED) {
             throw new InvalidCredentialsException();
         }
 
+        if (user.getStatus() == AccountStatus.LOCKED) {
+            if (user.getLockedUntil() == null || user.getLockedUntil().isBefore(Instant.now())) {
+                user.setStatus(AccountStatus.ACTIVE);
+                user.setLockedUntil(null);
+                userRepository.save(user);
+            } else {
+                throw new AccountLockedException();
+            }
+        }
+
+        loginAttemptService.clearFailures(email);
         return issueTokens(user);
     }
 
@@ -86,6 +133,10 @@ public class AuthServiceImpl implements AuthService {
 
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new InvalidTokenException("User not found"));
+
+            if (user.getStatus() == AccountStatus.DISABLED || user.getStatus() == AccountStatus.LOCKED) {
+                throw new InvalidTokenException("Account is not active");
+            }
 
             refreshTokenService.revoke(userId, jti);
             tokenBlacklistService.blacklist(jti, claims.getExpiration().toInstant());
@@ -115,6 +166,37 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public void forgotPassword(ForgotPasswordRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return;
+        }
+        String token = passwordResetTokenService.create(user.getId());
+        emailService.sendPasswordResetEmail(user.getEmail(), token);
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        UUID userId = passwordResetTokenService.consume(request.getToken())
+                .orElseThrow(() -> new InvalidTokenException("Invalid or expired reset token"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InvalidTokenException("User not found"));
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        if (user.getStatus() == AccountStatus.LOCKED) {
+            user.setStatus(AccountStatus.ACTIVE);
+            user.setLockedUntil(null);
+        }
+        userRepository.save(user);
+        refreshTokenService.revokeAllForUser(userId);
+        loginAttemptService.clearFailures(user.getEmail());
+    }
+
     private TokenResponse issueTokens(User user) {
         String accessJti = UUID.randomUUID().toString();
         String refreshJti = UUID.randomUUID().toString();
@@ -124,7 +206,7 @@ public class AuthServiceImpl implements AuthService {
 
         refreshTokenService.store(user.getId(), refreshJti, refreshToken);
 
-        long expiresIn = 30 * 60;
+        long expiresIn = jwtProperties.getAccessTokenExpiration().toSeconds();
 
         return new TokenResponse(accessToken, refreshToken, "Bearer", expiresIn);
     }
