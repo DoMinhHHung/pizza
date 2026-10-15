@@ -21,8 +21,18 @@ public class JwtService {
 
     public JwtService(JwtProperties jwtProperties) {
         this.jwtProperties = jwtProperties;
-        this.secretKey = Keys.hmacShaKeyFor(
-                jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
+
+        String secret = jwtProperties.getSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "JWT_SECRET is not configured. Please set the environment variable JWT_SECRET (at least 32 characters).");
+        }
+        if (secret.length() < 32) {
+            throw new IllegalStateException(
+                    "JWT_SECRET is too short. It must be at least 32 characters long.");
+        }
+
+        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateAccessToken(User user, String jti) {

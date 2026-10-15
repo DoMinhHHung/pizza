@@ -1,6 +1,5 @@
 spring:
   application:
-    port: ${SERVER_PORT:}
     name: auth-service
 
   datasource:
@@ -22,15 +21,17 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
-  spring:
-    data:
-      redis:
-        url: ${SPRING_DATA_REDIS_URL:}
-        password: ${SPRING_DATA_REDIS_PASSWORD:}
-        timeout: 2000ms
+  data:
+    redis:
+      url: ${SPRING_DATA_REDIS_URL:}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      timeout: 2000ms
 
-  app:
-    jwt:
-      secret: ${JWT_SECRET:}
-      access-token-expiration: 30m
-      refresh-token-expiration: 7d
+server:
+  port: ${SERVER_PORT:8080}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    access-token-expiration: 30m
+    refresh-token-expiration: 7d
