@@ -1,3 +1,6 @@
+PROTO_DIR=api/proto
+GEN_DIR=api/gen
+
 .PHONY: run tidy proto migrate-up migrate-down
 
 run:
@@ -7,7 +10,12 @@ tidy:
 	go mod tidy
 
 proto:
-	@echo "proto generation will be added in next milestone"
+	mkdir -p $(GEN_DIR)
+	protoc \
+	  -I $(PROTO_DIR) \
+	  --go_out=$(GEN_DIR) --go_opt=paths=source_relative \
+	  --go-grpc_out=$(GEN_DIR) --go-grpc_opt=paths=source_relative \
+	  $(PROTO_DIR)/control/v1/*.proto
 
 migrate-up:
 	goose -dir migrations postgres "$(DATABASE_URL)" up
