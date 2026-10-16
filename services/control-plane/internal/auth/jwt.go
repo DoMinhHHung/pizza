@@ -66,13 +66,13 @@ func (v *JWTValidator) authenticate(ctx context.Context) (uuid.UUID, error) {
 
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
-		if t.Method != jwt.SigningMethodHS256 {
-			return nil, fmt.Errorf("unexpected signing method")
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return v.secret, nil
 	})
 	if err != nil || !token.Valid {
-		return uuid.Nil, status.Error(codes.Unauthenticated, "invalid token")
+		return uuid.Nil, status.Errorf(codes.Unauthenticated, "invalid token: %v", err)
 	}
 
 	if claims.Type != "" && claims.Type != "access" {
