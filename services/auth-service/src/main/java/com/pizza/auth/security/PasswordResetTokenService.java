@@ -27,12 +27,10 @@ public class PasswordResetTokenService {
     }
 
     public Optional<UUID> consume(String token) {
-        String key = PREFIX + token;
-        String value = redisTemplate.opsForValue().get(key);
+        String value = redisTemplate.opsForValue().getAndDelete(PREFIX + token);
         if (value == null) {
             return Optional.empty();
         }
-        redisTemplate.delete(key);
         return Optional.of(UUID.fromString(value));
     }
 }

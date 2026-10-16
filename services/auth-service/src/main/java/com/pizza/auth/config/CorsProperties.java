@@ -18,7 +18,7 @@ public class CorsProperties {
     }
 
     public void setAllowedOrigins(String allowedOrigins) {
-        this.allowedOrigins = Arrays.asList(allowedOrigins.split(","));
+        this.allowedOrigins = splitCsv(allowedOrigins);
     }
 
     public List<String> getAllowedMethods() {
@@ -26,7 +26,7 @@ public class CorsProperties {
     }
 
     public void setAllowedMethods(String allowedMethods) {
-        this.allowedMethods = Arrays.asList(allowedMethods.split(","));
+        this.allowedMethods = splitCsv(allowedMethods);
     }
 
     public List<String> getAllowedHeaders() {
@@ -34,7 +34,7 @@ public class CorsProperties {
     }
 
     public void setAllowedHeaders(String allowedHeaders) {
-        this.allowedHeaders = Arrays.asList(allowedHeaders.split(","));
+        this.allowedHeaders = splitCsv(allowedHeaders);
     }
 
     public boolean isAllowCredentials() {
@@ -51,5 +51,15 @@ public class CorsProperties {
 
     public void setMaxAge(long maxAge) {
         this.maxAge = maxAge;
+    }
+
+    private static List<String> splitCsv(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 }

@@ -7,6 +7,7 @@ public class MailProperties {
 
     private String from;
     private String baseUrl = "http://localhost:8080";
+    private String frontendBaseUrl = "http://localhost:3000";
 
     public String getFrom() {
         return from;
@@ -22,5 +23,13 @@ public class MailProperties {
 
     public void setBaseUrl(String baseUrl) {
         this.baseUrl = baseUrl;
+    }
+
+    public String getFrontendBaseUrl() {
+        return frontendBaseUrl;
+    }
+
+    public void setFrontendBaseUrl(String frontendBaseUrl) {
+        this.frontendBaseUrl = frontendBaseUrl;
     }
 }

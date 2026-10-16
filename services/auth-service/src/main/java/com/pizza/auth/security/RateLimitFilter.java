@@ -28,45 +28,30 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
-
         String path = request.getRequestURI();
         String method = request.getMethod();
-
         if (!"POST".equalsIgnoreCase(method)) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        String clientKey = resolveClientKey(request);
+        String clientKey = request.getRemoteAddr();
         RateLimitRule rule = resolveRule(path);
-
         if (rule == null) {
             filterChain.doFilter(request, response);
             return;
         }
-
         String redisKey = PREFIX + rule.name() + ":" + clientKey;
         Long count = redisTemplate.opsForValue().increment(redisKey);
         if (count != null && count == 1L) {
             redisTemplate.expire(redisKey, rule.window());
         }
-
         if (count != null && count > rule.limit()) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType("application/json");
             response.getWriter().write("{\"message\":\"Too many requests. Please try again later.\"}");
             return;
         }
-
         filterChain.doFilter(request, response);
-    }
-
-    private String resolveClientKey(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     private RateLimitRule resolveRule(String path) {

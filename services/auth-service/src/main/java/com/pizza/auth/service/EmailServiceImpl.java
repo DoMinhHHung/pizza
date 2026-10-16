@@ -18,7 +18,7 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendVerificationEmail(String to, String token) {
-        String verifyUrl = mailProperties.getBaseUrl() + "/api/v1/auth/verify-email?token=" + token;
+        String verifyUrl = mailProperties.getFrontendBaseUrl() + "/verify-email?token=" + token;
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(mailProperties.getFrom());
         message.setTo(to);
@@ -35,7 +35,7 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendPasswordResetEmail(String to, String token) {
-        String resetUrl = mailProperties.getBaseUrl() + "/api/v1/auth/reset-password?token=" + token;
+        String resetUrl = mailProperties.getFrontendBaseUrl() + "/reset-password?token=" + token;
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(mailProperties.getFrom());
         message.setTo(to);

@@ -39,6 +39,7 @@ public class AuthServiceImpl implements AuthService {
     private final EmailService emailService;
     private final JwtProperties jwtProperties;
     private final SecurityProperties securityProperties;
+    private final String dummyPasswordHash;
 
     public AuthServiceImpl(UserRepository userRepository,
             PasswordEncoder passwordEncoder,
@@ -60,10 +61,11 @@ public class AuthServiceImpl implements AuthService {
         this.emailService = emailService;
         this.jwtProperties = jwtProperties;
         this.securityProperties = securityProperties;
+        this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing");
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = InvalidCredentialsException.class)
     public TokenResponse login(LoginRequest request) {
         String email = request.getEmail().trim().toLowerCase();
 
@@ -71,11 +73,12 @@ public class AuthServiceImpl implements AuthService {
             throw new AccountLockedException();
         }
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> {
-                    loginAttemptService.recordFailure(email);
-                    return new InvalidCredentialsException();
-                });
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            passwordEncoder.matches(request.getPassword(), dummyPasswordHash);
+            loginAttemptService.recordFailure(email);
+            throw new InvalidCredentialsException();
+        }
 
         if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now())) {
             throw new AccountLockedException();
@@ -91,18 +94,17 @@ public class AuthServiceImpl implements AuthService {
             throw new InvalidCredentialsException();
         }
 
-        if (user.getStatus() == AccountStatus.DISABLED) {
-            throw new InvalidCredentialsException();
-        }
-
         if (user.getStatus() == AccountStatus.LOCKED) {
-            if (user.getLockedUntil() == null || user.getLockedUntil().isBefore(Instant.now())) {
-                user.setStatus(AccountStatus.ACTIVE);
-                user.setLockedUntil(null);
-                userRepository.save(user);
-            } else {
+            if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now())) {
                 throw new AccountLockedException();
             }
+            user.setStatus(AccountStatus.ACTIVE);
+            user.setLockedUntil(null);
+            userRepository.save(user);
+        }
+
+        if (user.getStatus() != AccountStatus.ACTIVE) {
+            throw new InvalidCredentialsException();
         }
 
         loginAttemptService.clearFailures(email);
@@ -112,37 +114,27 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public TokenResponse refresh(RefreshRequest request) {
         String refreshToken = request.getRefreshToken();
-
         try {
             Claims claims = jwtService.parseClaims(refreshToken);
-
             if (!jwtService.isRefreshToken(refreshToken)) {
                 throw new InvalidTokenException("Not a refresh token");
             }
-
             String jti = claims.getId();
             UUID userId = UUID.fromString(claims.getSubject());
-
             if (tokenBlacklistService.isBlacklisted(jti)) {
                 throw new InvalidTokenException("Token has been revoked");
             }
-
             if (!refreshTokenService.exists(userId, jti)) {
                 throw new InvalidTokenException("Refresh token not found or expired");
             }
-
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new InvalidTokenException("User not found"));
-
-            if (user.getStatus() == AccountStatus.DISABLED || user.getStatus() == AccountStatus.LOCKED) {
+            if (user.getStatus() != AccountStatus.ACTIVE) {
                 throw new InvalidTokenException("Account is not active");
             }
-
             refreshTokenService.revoke(userId, jti);
             tokenBlacklistService.blacklist(jti, claims.getExpiration().toInstant());
-
             return issueTokens(user);
-
         } catch (JwtException ex) {
             throw new InvalidTokenException("Invalid or expired refresh token");
         }
@@ -155,7 +147,6 @@ public class AuthServiceImpl implements AuthService {
                 String accessJti = jwtService.getJti(accessToken);
                 tokenBlacklistService.blacklist(accessJti, jwtService.getExpiration(accessToken));
             }
-
             if (refreshToken != null && !refreshToken.isBlank()) {
                 String refreshJti = jwtService.getJti(refreshToken);
                 UUID userId = jwtService.getUserId(refreshToken);
@@ -183,10 +174,8 @@ public class AuthServiceImpl implements AuthService {
     public void resetPassword(ResetPasswordRequest request) {
         UUID userId = passwordResetTokenService.consume(request.getToken())
                 .orElseThrow(() -> new InvalidTokenException("Invalid or expired reset token"));
-
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new InvalidTokenException("User not found"));
-
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         if (user.getStatus() == AccountStatus.LOCKED) {
             user.setStatus(AccountStatus.ACTIVE);
@@ -200,14 +189,10 @@ public class AuthServiceImpl implements AuthService {
     private TokenResponse issueTokens(User user) {
         String accessJti = UUID.randomUUID().toString();
         String refreshJti = UUID.randomUUID().toString();
-
         String accessToken = jwtService.generateAccessToken(user, accessJti);
         String refreshToken = jwtService.generateRefreshToken(user, refreshJti);
-
         refreshTokenService.store(user.getId(), refreshJti, refreshToken);
-
         long expiresIn = jwtProperties.getAccessTokenExpiration().toSeconds();
-
         return new TokenResponse(accessToken, refreshToken, "Bearer", expiresIn);
     }
 }
