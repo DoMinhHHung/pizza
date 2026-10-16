@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/DoMinhHHung/pizza/services/control-plane/internal/auth"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/config"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
@@ -34,7 +35,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	grpcServer := grpc.NewServer()
+	validator := auth.NewJWTValidator(cfg.JWTSecret)
+
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(validator.UnaryInterceptor()),
+	)
 
 	go func() {
 		slog.Info("gRPC server starting", "port", cfg.GRPCPort)
