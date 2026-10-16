@@ -1,0 +1,64 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:auth_service_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      url: redis://localhost:6379
+      timeout: 2000ms
+  mail:
+    host: localhost
+    port: 1025
+    username: test
+    password: test
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+management:
+  health:
+    mail:
+      enabled: false
+    redis:
+      enabled: false
+
+app:
+  jwt:
+    secret: test-jwt-secret-key-at-least-32-characters-long
+    access-token-expiration: 30m
+    refresh-token-expiration: 7d
+  security:
+    max-failed-attempts: 5
+    lock-duration: 30m
+    verification-token-ttl: 24h
+    reset-token-ttl: 1h
+    rate-limit:
+      login-requests: 100
+      login-window: 1m
+      register-requests: 100
+      register-window: 1m
+      forgot-password-requests: 100
+      forgot-password-window: 1m
+  mail:
+    from: noreply@pizza.test
+    base-url: http://localhost:8080
+  cors:
+    allowed-origins: http://localhost:3000
+    allowed-headers: Authorization,Content-Type
