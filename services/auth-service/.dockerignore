@@ -3,4 +3,8 @@ target
 .idea
 *.iml
 .env
+.env.*
+!.env.example
 .DS_Store
+*.md
+.vscode
