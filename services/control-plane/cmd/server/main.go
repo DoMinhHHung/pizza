@@ -2,32 +2,31 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/joho/godotenv"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+
 	controlv1 "github.com/DoMinhHHung/pizza/services/control-plane/api/gen/control/v1"
+	"github.com/DoMinhHHung/pizza/services/control-plane/internal/apikey"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/auth"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/config"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/db"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/org"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/project"
-	"github.com/joho/godotenv"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	slog.SetDefault(logger)
 	_ = godotenv.Load()
 
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
+		slog.Error("load config", "error", err)
 		os.Exit(1)
 	}
 
@@ -36,28 +35,34 @@ func main() {
 
 	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		slog.Error("database", "error", err)
+		slog.Error("connect database", "error", err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.GRPCPort))
+	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
-		slog.Error("failed to listen", "error", err)
+		slog.Error("listen", "error", err)
 		os.Exit(1)
 	}
 
 	validator := auth.NewJWTValidator(cfg.JWTSecret)
+
 	orgRepo := org.NewRepository(pool)
 	orgService := org.NewService(orgRepo)
+
 	projectRepo := project.NewRepository(pool)
 	projectService := project.NewService(projectRepo, orgRepo)
+
+	apiKeyRepo := apikey.NewRepository(pool)
+	apiKeyService := apikey.NewService(apiKeyRepo, projectRepo, orgRepo)
 
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(validator.UnaryInterceptor()),
 	)
 	controlv1.RegisterOrganizationServiceServer(grpcServer, orgService)
 	controlv1.RegisterProjectServiceServer(grpcServer, projectService)
+	controlv1.RegisterApiKeyServiceServer(grpcServer, apiKeyService)
 
 	reflection.Register(grpcServer)
 	go func() {
@@ -70,7 +75,6 @@ func main() {
 
 	<-ctx.Done()
 	slog.Info("shutting down")
-
 	grpcServer.GracefulStop()
 	slog.Info("server stopped")
 }
