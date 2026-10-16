@@ -42,7 +42,7 @@ public class JwtService {
         return Jwts.builder()
                 .id(jti)
                 .subject(user.getId().toString())
-                .claim("email", user.getEmailAddress())
+                .claim("email", user.getEmail())
                 .claim("status", user.getStatus().name())
                 .claim("type", "access")
                 .issuedAt(Date.from(now))

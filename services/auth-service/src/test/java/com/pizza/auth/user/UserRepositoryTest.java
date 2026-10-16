@@ -28,7 +28,7 @@ class UserRepositoryTest {
         Optional<User> found = userRepository.findByEmail("test.user@example.com");
 
         assertThat(found).isPresent();
-        assertThat(found.get().getEmailAddress()).isEqualTo("test.user@example.com");
+        assertThat(found.get().getEmail()).isEqualTo("test.user@example.com");
         assertThat(found.get().getFullName()).isEqualTo("Nguyen Van A");
         assertThat(found.get().getStatus()).isEqualTo(AccountStatus.PENDING_VERIFICATION);
         assertThat(found.get().getPasswordHash()).isEqualTo("hashed-password");

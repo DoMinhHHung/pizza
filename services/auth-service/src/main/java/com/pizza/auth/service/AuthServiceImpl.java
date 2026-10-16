@@ -168,7 +168,7 @@ public class AuthServiceImpl implements AuthService {
             return;
         }
         String token = passwordResetTokenService.create(user.getId());
-        emailService.sendPasswordResetEmail(user.getEmailAddress(), token);
+        emailService.sendPasswordResetEmail(user.getEmail(), token);
     }
 
     @Override
@@ -185,7 +185,7 @@ public class AuthServiceImpl implements AuthService {
         }
         userRepository.save(user);
         refreshTokenService.revokeAllForUser(userId);
-        loginAttemptService.clearFailures(user.getEmailAddress());
+        loginAttemptService.clearFailures(user.getEmail());
     }
 
     private TokenResponse issueTokens(User user) {

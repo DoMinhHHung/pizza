@@ -59,13 +59,13 @@ public class UserServiceImpl implements UserService {
             User saved = userRepository.saveAndFlush(user);
             String token = verificationTokenService.create(saved.getId());
             try {
-                emailService.sendVerificationEmail(saved.getEmailAddress(), token);
+                emailService.sendVerificationEmail(saved.getEmail(), token);
             } catch (Exception ex) {
-                log.error("Failed to send verification email to {}", saved.getEmailAddress(), ex);
+                log.error("Failed to send verification email to {}", saved.getEmail(), ex);
             }
             return new RegisterResponse(
                     saved.getId(),
-                    saved.getEmailAddress(),
+                    saved.getEmail(),
                     saved.getFullName(),
                     saved.getStatus());
         } catch (DataIntegrityViolationException ex) {
@@ -98,9 +98,9 @@ public class UserServiceImpl implements UserService {
         }
         String token = verificationTokenService.create(user.getId());
         try {
-            emailService.sendVerificationEmail(user.getEmailAddress(), token);
+            emailService.sendVerificationEmail(user.getEmail(), token);
         } catch (Exception ex) {
-            log.error("Failed to resend verification email to {}", user.getEmailAddress(), ex);
+            log.error("Failed to resend verification email to {}", user.getEmail(), ex);
         }
     }
 
@@ -111,7 +111,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new InvalidTokenException("User not found"));
         return new UserResponse(
                 user.getId(),
-                user.getEmailAddress(),
+                user.getEmail(),
                 user.getFullName(),
                 user.getStatus(),
                 user.getEmailVerifiedAt(),

@@ -30,7 +30,7 @@ public class User {
 
     @Setter
     @Column(nullable = false, unique = true, length = 254)
-    private String emailAddress;
+    private String email;
 
     @Setter
     @Column(name = "password_hash", nullable = false, length = 255)
@@ -59,8 +59,8 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public User(String emailAddress, String passwordHash, String fullName) {
-        this.emailAddress = normalizeEmail(emailAddress);
+    public User(String email, String passwordHash, String fullName) {
+        this.email = normalizeEmail(email);
         this.passwordHash = passwordHash;
         this.fullName = fullName;
         this.status = AccountStatus.PENDING_VERIFICATION;
@@ -78,11 +78,11 @@ public class User {
         this.updatedAt = Instant.now();
     }
 
-    public void setEmailAddress(String emailAddress) {
-        this.emailAddress = normalizeEmail(emailAddress);
+    public void setEmail(String email) {
+        this.email = normalizeEmail(email);
     }
 
-    private static String normalizeEmail(String emailAddress) {
-        return emailAddress == null ? null : emailAddress.trim().toLowerCase();
+    private static String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase();
     }
 }
