@@ -47,7 +47,6 @@ func (s *Service) CreateProject(ctx context.Context, req *controlv1.CreateProjec
 		return nil, status.Error(codes.InvalidArgument, "slug must be lowercase alphanumeric with hyphens")
 	}
 
-	// AuthZ: user phải là member của org
 	ok, err := s.orgRepo.HasMember(ctx, orgID, userID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to check membership")
@@ -68,7 +67,6 @@ func (s *Service) CreateProject(ctx context.Context, req *controlv1.CreateProjec
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to create project")
 	}
-
 	return toProto(p), nil
 }
 
