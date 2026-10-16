@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,7 +60,7 @@ class UserServiceTest {
     void register_success() throws Exception {
         when(userRepository.existsByEmail("test.user@example.com")).thenReturn(false);
         when(passwordEncoder.encode("Str0ngP@ss!")).thenReturn("hashed-password");
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
             User u = invocation.getArgument(0);
             Field f = User.class.getDeclaredField("id");
             f.setAccessible(true);
@@ -75,6 +76,7 @@ class UserServiceTest {
         assertThat(response.getFullName()).isEqualTo("Nguyen Van A");
         assertThat(response.getStatus()).isEqualTo(AccountStatus.PENDING_VERIFICATION);
         verify(emailService).sendVerificationEmail(eq("test.user@example.com"), eq("verify-token"));
+        verify(userRepository).saveAndFlush(any(User.class));
     }
 
     @Test
@@ -82,7 +84,26 @@ class UserServiceTest {
         when(userRepository.existsByEmail("test.user@example.com")).thenReturn(true);
         assertThatThrownBy(() -> userService.register(request))
                 .isInstanceOf(EmailAlreadyExistsException.class);
-        verify(userRepository, never()).save(any());
+        verify(userRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void register_mailFailure_stillSucceeds() throws Exception {
+        when(userRepository.existsByEmail("test.user@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("Str0ngP@ss!")).thenReturn("hashed-password");
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
+            User u = invocation.getArgument(0);
+            Field f = User.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(u, UUID.randomUUID());
+            return u;
+        });
+        when(verificationTokenService.create(any(UUID.class))).thenReturn("verify-token");
+        doThrow(new RuntimeException("smtp down")).when(emailService)
+                .sendVerificationEmail(anyString(), anyString());
+
+        RegisterResponse response = userService.register(request);
+        assertThat(response.getEmail()).isEqualTo("test.user@example.com");
     }
 
     @Test
@@ -97,6 +118,20 @@ class UserServiceTest {
 
         assertThat(user.getStatus()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(user.getEmailVerifiedAt()).isNotNull();
+    }
+
+    @Test
+    void verifyEmail_notPending_noChange() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("user@example.com", "hash", "Name");
+        user.setStatus(AccountStatus.DISABLED);
+        when(verificationTokenService.consume("good-token")).thenReturn(Optional.of(userId));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        userService.verifyEmail("good-token");
+
+        assertThat(user.getStatus()).isEqualTo(AccountStatus.DISABLED);
+        verify(userRepository, never()).save(any());
     }
 
     @Test

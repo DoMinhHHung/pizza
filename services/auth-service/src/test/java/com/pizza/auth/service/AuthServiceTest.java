@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,9 +34,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -53,21 +52,33 @@ class AuthServiceTest {
     @Mock private JwtProperties jwtProperties;
     @Mock private SecurityProperties securityProperties;
 
-    @InjectMocks
     private AuthServiceImpl authService;
-
     private User activeUser;
     private LoginRequest loginRequest;
 
     @BeforeEach
     void setUp() {
+        when(passwordEncoder.encode(anyString())).thenReturn("dummy-hash");
+        lenient().when(jwtProperties.getAccessTokenExpiration()).thenReturn(Duration.ofMinutes(30));
+        lenient().when(jwtProperties.getRefreshTokenExpiration()).thenReturn(Duration.ofDays(7));
+
+        authService = new AuthServiceImpl(
+                userRepository,
+                passwordEncoder,
+                jwtService,
+                refreshTokenService,
+                tokenBlacklistService,
+                loginAttemptService,
+                passwordResetTokenService,
+                emailService,
+                jwtProperties,
+                securityProperties);
+
         activeUser = new User("user@example.com", "hashed", "Test User");
         activeUser.setStatus(AccountStatus.ACTIVE);
         loginRequest = new LoginRequest();
         loginRequest.setEmail("user@example.com");
         loginRequest.setPassword("password");
-        Mockito.lenient().when(jwtProperties.getAccessTokenExpiration()).thenReturn(Duration.ofMinutes(30));
-        Mockito.lenient().when(jwtProperties.getRefreshTokenExpiration()).thenReturn(Duration.ofDays(7));
     }
 
     @Test
@@ -88,11 +99,33 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_pendingVerification_throws() {
+        activeUser.setStatus(AccountStatus.PENDING_VERIFICATION);
+        when(loginAttemptService.isLocked("user@example.com")).thenReturn(false);
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("password", "hashed")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.login(loginRequest))
+                .isInstanceOf(InvalidCredentialsException.class);
+        verify(jwtService, never()).generateAccessToken(any(), anyString());
+    }
+
+    @Test
+    void login_unknownEmail_recordsFailure() {
+        when(loginAttemptService.isLocked("user@example.com")).thenReturn(false);
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.matches(eq("password"), anyString())).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.login(loginRequest))
+                .isInstanceOf(InvalidCredentialsException.class);
+        verify(loginAttemptService).recordFailure("user@example.com");
+    }
+
+    @Test
     void login_wrongPassword_recordsFailure() {
         when(loginAttemptService.isLocked("user@example.com")).thenReturn(false);
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(activeUser));
         when(passwordEncoder.matches("password", "hashed")).thenReturn(false);
-        when(loginAttemptService.isLocked("user@example.com")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(loginRequest))
                 .isInstanceOf(InvalidCredentialsException.class);
