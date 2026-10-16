@@ -1,5 +1,12 @@
 package com.pizza.auth.service;
 
+import java.time.Instant;
+import java.util.UUID;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.pizza.auth.config.JwtProperties;
 import com.pizza.auth.config.SecurityProperties;
 import com.pizza.auth.dto.ForgotPasswordRequest;
@@ -18,13 +25,9 @@ import com.pizza.auth.security.TokenBlacklistService;
 import com.pizza.auth.user.AccountStatus;
 import com.pizza.auth.user.User;
 import com.pizza.auth.user.UserRepository;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
-import java.time.Instant;
-import java.util.UUID;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -124,7 +127,8 @@ public class AuthServiceImpl implements AuthService {
             if (tokenBlacklistService.isBlacklisted(jti)) {
                 throw new InvalidTokenException("Token has been revoked");
             }
-            if (!refreshTokenService.exists(userId, jti)) {
+            if (!refreshTokenService.consume(userId, jti)) {
+                refreshTokenService.revokeAllForUser(userId);
                 throw new InvalidTokenException("Refresh token not found or expired");
             }
             User user = userRepository.findById(userId)
@@ -132,8 +136,6 @@ public class AuthServiceImpl implements AuthService {
             if (user.getStatus() != AccountStatus.ACTIVE) {
                 throw new InvalidTokenException("Account is not active");
             }
-            refreshTokenService.revoke(userId, jti);
-            tokenBlacklistService.blacklist(jti, claims.getExpiration().toInstant());
             return issueTokens(user);
         } catch (JwtException ex) {
             throw new InvalidTokenException("Invalid or expired refresh token");
@@ -166,7 +168,7 @@ public class AuthServiceImpl implements AuthService {
             return;
         }
         String token = passwordResetTokenService.create(user.getId());
-        emailService.sendPasswordResetEmail(user.getEmail(), token);
+        emailService.sendPasswordResetEmail(user.getEmailAddress(), token);
     }
 
     @Override
@@ -183,7 +185,7 @@ public class AuthServiceImpl implements AuthService {
         }
         userRepository.save(user);
         refreshTokenService.revokeAllForUser(userId);
-        loginAttemptService.clearFailures(user.getEmail());
+        loginAttemptService.clearFailures(user.getEmailAddress());
     }
 
     private TokenResponse issueTokens(User user) {

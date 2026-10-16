@@ -1,5 +1,15 @@
 package com.pizza.auth.service;
 
+import java.time.Instant;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.pizza.auth.dto.ChangePasswordRequest;
 import com.pizza.auth.dto.RegisterRequest;
 import com.pizza.auth.dto.RegisterResponse;
@@ -12,14 +22,6 @@ import com.pizza.auth.security.VerificationTokenService;
 import com.pizza.auth.user.AccountStatus;
 import com.pizza.auth.user.User;
 import com.pizza.auth.user.UserRepository;
-import java.time.Instant;
-import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -57,13 +59,13 @@ public class UserServiceImpl implements UserService {
             User saved = userRepository.saveAndFlush(user);
             String token = verificationTokenService.create(saved.getId());
             try {
-                emailService.sendVerificationEmail(saved.getEmail(), token);
+                emailService.sendVerificationEmail(saved.getEmailAddress(), token);
             } catch (Exception ex) {
-                log.error("Failed to send verification email to {}", saved.getEmail(), ex);
+                log.error("Failed to send verification email to {}", saved.getEmailAddress(), ex);
             }
             return new RegisterResponse(
                     saved.getId(),
-                    saved.getEmail(),
+                    saved.getEmailAddress(),
                     saved.getFullName(),
                     saved.getStatus());
         } catch (DataIntegrityViolationException ex) {
@@ -96,9 +98,9 @@ public class UserServiceImpl implements UserService {
         }
         String token = verificationTokenService.create(user.getId());
         try {
-            emailService.sendVerificationEmail(user.getEmail(), token);
+            emailService.sendVerificationEmail(user.getEmailAddress(), token);
         } catch (Exception ex) {
-            log.error("Failed to resend verification email to {}", user.getEmail(), ex);
+            log.error("Failed to resend verification email to {}", user.getEmailAddress(), ex);
         }
     }
 
@@ -109,7 +111,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new InvalidTokenException("User not found"));
         return new UserResponse(
                 user.getId(),
-                user.getEmail(),
+                user.getEmailAddress(),
                 user.getFullName(),
                 user.getStatus(),
                 user.getEmailVerifiedAt(),

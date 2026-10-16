@@ -7,8 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class JwtProperties {
 
     private String secret;
-    private Duration accessTokenExpiration = Duration.ofMinutes(30);
-    private Duration refreshTokenExpiration = Duration.ofDays(7);
+    private Duration accessTokenExpiration = Duration.ofMinutes(15);
+    private Duration refreshTokenExpiration = Duration.ofDays(14);
 
     public String getSecret() {
         return secret;

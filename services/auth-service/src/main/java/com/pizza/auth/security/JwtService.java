@@ -1,16 +1,20 @@
 package com.pizza.auth.security;
 
-import com.pizza.auth.config.JwtProperties;
-import com.pizza.auth.user.User;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
+
 import javax.crypto.SecretKey;
+
 import org.springframework.stereotype.Service;
+
+import com.pizza.auth.config.JwtProperties;
+import com.pizza.auth.user.User;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 
 @Service
 public class JwtService {
@@ -38,7 +42,7 @@ public class JwtService {
         return Jwts.builder()
                 .id(jti)
                 .subject(user.getId().toString())
-                .claim("email", user.getEmail())
+                .claim("email", user.getEmailAddress())
                 .claim("status", user.getStatus().name())
                 .claim("type", "access")
                 .issuedAt(Date.from(now))

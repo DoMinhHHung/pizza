@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,7 @@ import com.pizza.auth.config.JwtProperties;
 import com.pizza.auth.config.SecurityProperties;
 import com.pizza.auth.dto.ForgotPasswordRequest;
 import com.pizza.auth.dto.LoginRequest;
+import com.pizza.auth.dto.RefreshRequest;
 import com.pizza.auth.dto.ResetPasswordRequest;
 import com.pizza.auth.dto.TokenResponse;
 import com.pizza.auth.exception.AccountLockedException;
@@ -28,6 +30,7 @@ import com.pizza.auth.security.TokenBlacklistService;
 import com.pizza.auth.user.AccountStatus;
 import com.pizza.auth.user.User;
 import com.pizza.auth.user.UserRepository;
+import io.jsonwebtoken.Claims;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
@@ -189,5 +192,80 @@ class AuthServiceTest {
         req.setNewPassword("newPass");
         assertThatThrownBy(() -> authService.resetPassword(req))
                 .isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
+    void refresh_success_rotatesWithoutBlacklistingOrRevokingAll() {
+        UUID userId = UUID.randomUUID();
+        Claims claims = mock(Claims.class);
+        when(claims.getId()).thenReturn("old-jti");
+        when(claims.getSubject()).thenReturn(userId.toString());
+        when(jwtService.parseClaims("old-refresh")).thenReturn(claims);
+        when(jwtService.isRefreshToken("old-refresh")).thenReturn(true);
+        when(tokenBlacklistService.isBlacklisted("old-jti")).thenReturn(false);
+        when(refreshTokenService.consume(userId, "old-jti")).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
+        when(jwtService.generateAccessToken(any(), anyString())).thenReturn("new-access");
+        when(jwtService.generateRefreshToken(any(), anyString())).thenReturn("new-refresh");
+
+        TokenResponse response = authService.refresh(refreshRequest("old-refresh"));
+
+        assertThat(response.getAccessToken()).isEqualTo("new-access");
+        assertThat(response.getRefreshToken()).isEqualTo("new-refresh");
+        verify(refreshTokenService, never()).revokeAllForUser(any());
+        verify(tokenBlacklistService, never()).blacklist(anyString(), any());
+    }
+
+    @Test
+    void refresh_reusedToken_revokesAllSessionsAndThrows() {
+        UUID userId = UUID.randomUUID();
+        Claims claims = mock(Claims.class);
+        when(claims.getId()).thenReturn("used-jti");
+        when(claims.getSubject()).thenReturn(userId.toString());
+        when(jwtService.parseClaims("used-refresh")).thenReturn(claims);
+        when(jwtService.isRefreshToken("used-refresh")).thenReturn(true);
+        when(tokenBlacklistService.isBlacklisted("used-jti")).thenReturn(false);
+        when(refreshTokenService.consume(userId, "used-jti")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.refresh(refreshRequest("used-refresh")))
+                .isInstanceOf(InvalidTokenException.class);
+
+        verify(refreshTokenService).revokeAllForUser(userId);
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void refresh_blacklistedToken_throwsWithoutConsuming() {
+        UUID userId = UUID.randomUUID();
+        Claims claims = mock(Claims.class);
+        when(claims.getId()).thenReturn("logged-out-jti");
+        when(claims.getSubject()).thenReturn(userId.toString());
+        when(jwtService.parseClaims("logged-out-refresh")).thenReturn(claims);
+        when(jwtService.isRefreshToken("logged-out-refresh")).thenReturn(true);
+        when(tokenBlacklistService.isBlacklisted("logged-out-jti")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.refresh(refreshRequest("logged-out-refresh")))
+                .isInstanceOf(InvalidTokenException.class);
+
+        verify(refreshTokenService, never()).consume(any(), anyString());
+        verify(refreshTokenService, never()).revokeAllForUser(any());
+    }
+
+    @Test
+    void refresh_accessTokenPresented_throws() {
+        Claims claims = mock(Claims.class);
+        when(jwtService.parseClaims("access-token")).thenReturn(claims);
+        when(jwtService.isRefreshToken("access-token")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.refresh(refreshRequest("access-token")))
+                .isInstanceOf(InvalidTokenException.class);
+
+        verify(refreshTokenService, never()).consume(any(), anyString());
+    }
+
+    private RefreshRequest refreshRequest(String token) {
+        RefreshRequest request = new RefreshRequest();
+        request.setRefreshToken(token);
+        return request;
     }
 }
