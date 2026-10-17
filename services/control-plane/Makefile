@@ -22,3 +22,14 @@ migrate-up:
 
 migrate-down:
 	goose -dir migrations postgres "$(DATABASE_URL)" down
+
+.PHONY: test test-unit test-integration
+
+test-unit:
+	go test ./internal/auth/ ./internal/org/ -count=1 -short
+
+test-integration:
+	go test ./internal/org/ ./internal/project/ ./internal/testutil/ -count=1 -timeout 120s
+
+test:
+	go test ./... -count=1 -timeout 120s
