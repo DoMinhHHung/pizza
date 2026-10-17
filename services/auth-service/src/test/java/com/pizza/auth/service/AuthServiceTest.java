@@ -12,6 +12,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 import com.pizza.auth.config.JwtProperties;
 import com.pizza.auth.config.SecurityProperties;
 import com.pizza.auth.dto.ForgotPasswordRequest;
@@ -30,30 +41,32 @@ import com.pizza.auth.security.TokenBlacklistService;
 import com.pizza.auth.user.AccountStatus;
 import com.pizza.auth.user.User;
 import com.pizza.auth.user.UserRepository;
+
 import io.jsonwebtoken.Claims;
-import java.time.Duration;
-import java.util.Optional;
-import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    @Mock private UserRepository userRepository;
-    @Mock private PasswordEncoder passwordEncoder;
-    @Mock private JwtService jwtService;
-    @Mock private RefreshTokenService refreshTokenService;
-    @Mock private TokenBlacklistService tokenBlacklistService;
-    @Mock private LoginAttemptService loginAttemptService;
-    @Mock private PasswordResetTokenService passwordResetTokenService;
-    @Mock private EmailService emailService;
-    @Mock private JwtProperties jwtProperties;
-    @Mock private SecurityProperties securityProperties;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PasswordEncoder passwordEncoder;
+    @Mock
+    private JwtService jwtService;
+    @Mock
+    private RefreshTokenService refreshTokenService;
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
+    @Mock
+    private LoginAttemptService loginAttemptService;
+    @Mock
+    private PasswordResetTokenService passwordResetTokenService;
+    @Mock
+    private EmailService emailService;
+    @Mock
+    private JwtProperties jwtProperties;
+    @Mock
+    private SecurityProperties securityProperties;
 
     private AuthServiceImpl authService;
     private User activeUser;
@@ -77,17 +90,18 @@ class AuthServiceTest {
                 jwtProperties,
                 securityProperties);
 
-        activeUser = new User("user@example.com", "hashed", "Test User");
+        activeUser = new User("user@example.com", "existing_username", "hashed", "Test User");
         activeUser.setStatus(AccountStatus.ACTIVE);
+
         loginRequest = new LoginRequest();
-        loginRequest.setEmail("user@example.com");
+        loginRequest.setIdentifier("user@example.com");
         loginRequest.setPassword("password");
     }
 
     @Test
     void login_success() {
         when(loginAttemptService.isLocked("user@example.com")).thenReturn(false);
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(activeUser));
+        when(userRepository.findByEmailOrUsername("user@example.com")).thenReturn(Optional.of(activeUser));
         when(passwordEncoder.matches("password", "hashed")).thenReturn(true);
         when(jwtService.generateAccessToken(any(), anyString())).thenReturn("access");
         when(jwtService.generateRefreshToken(any(), anyString())).thenReturn("refresh");
@@ -102,10 +116,30 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_byUsername_success() {
+        LoginRequest byUsername = new LoginRequest();
+        byUsername.setIdentifier("existing_username");
+        byUsername.setPassword("password");
+
+        when(loginAttemptService.isLocked("existing_username")).thenReturn(false);
+        when(userRepository.findByEmailOrUsername("existing_username")).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("password", "hashed")).thenReturn(true);
+        when(jwtService.generateAccessToken(any(), anyString())).thenReturn("access");
+        when(jwtService.generateRefreshToken(any(), anyString())).thenReturn("refresh");
+        doNothing().when(refreshTokenService).store(any(), anyString(), anyString());
+        doNothing().when(loginAttemptService).clearFailures(anyString());
+
+        TokenResponse response = authService.login(byUsername);
+
+        assertThat(response.getAccessToken()).isEqualTo("access");
+        verify(userRepository).findByEmailOrUsername("existing_username");
+    }
+
+    @Test
     void login_pendingVerification_throws() {
         activeUser.setStatus(AccountStatus.PENDING_VERIFICATION);
         when(loginAttemptService.isLocked("user@example.com")).thenReturn(false);
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(activeUser));
+        when(userRepository.findByEmailOrUsername("user@example.com")).thenReturn(Optional.of(activeUser));
         when(passwordEncoder.matches("password", "hashed")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.login(loginRequest))
@@ -114,9 +148,9 @@ class AuthServiceTest {
     }
 
     @Test
-    void login_unknownEmail_recordsFailure() {
+    void login_unknownIdentifier_recordsFailure() {
         when(loginAttemptService.isLocked("user@example.com")).thenReturn(false);
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailOrUsername("user@example.com")).thenReturn(Optional.empty());
         when(passwordEncoder.matches(eq("password"), anyString())).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(loginRequest))
@@ -127,7 +161,7 @@ class AuthServiceTest {
     @Test
     void login_wrongPassword_recordsFailure() {
         when(loginAttemptService.isLocked("user@example.com")).thenReturn(false);
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(activeUser));
+        when(userRepository.findByEmailOrUsername("user@example.com")).thenReturn(Optional.of(activeUser));
         when(passwordEncoder.matches("password", "hashed")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(loginRequest))
@@ -140,27 +174,27 @@ class AuthServiceTest {
         when(loginAttemptService.isLocked("user@example.com")).thenReturn(true);
         assertThatThrownBy(() -> authService.login(loginRequest))
                 .isInstanceOf(AccountLockedException.class);
-        verify(userRepository, never()).findByEmail(anyString());
+        verify(userRepository, never()).findByEmailOrUsername(anyString());
     }
 
     @Test
     void forgotPassword_existingUser_sendsEmail() {
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(activeUser));
+        when(userRepository.findByEmailOrUsername("user@example.com")).thenReturn(Optional.of(activeUser));
         when(passwordResetTokenService.create(any())).thenReturn("reset-token");
         doNothing().when(emailService).sendPasswordResetEmail(anyString(), anyString());
 
         ForgotPasswordRequest req = new ForgotPasswordRequest();
-        req.setEmail("user@example.com");
+        req.setIdentifier("user@example.com");
         authService.forgotPassword(req);
 
         verify(emailService).sendPasswordResetEmail(eq("user@example.com"), eq("reset-token"));
     }
 
     @Test
-    void forgotPassword_unknownEmail_noOp() {
-        when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+    void forgotPassword_unknownIdentifier_noOp() {
+        when(userRepository.findByEmailOrUsername("unknown@example.com")).thenReturn(Optional.empty());
         ForgotPasswordRequest req = new ForgotPasswordRequest();
-        req.setEmail("unknown@example.com");
+        req.setIdentifier("unknown@example.com");
         authService.forgotPassword(req);
         verify(emailService, never()).sendPasswordResetEmail(anyString(), anyString());
     }

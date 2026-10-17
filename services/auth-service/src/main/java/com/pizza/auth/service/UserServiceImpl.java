@@ -13,10 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 import com.pizza.auth.dto.ChangePasswordRequest;
 import com.pizza.auth.dto.RegisterRequest;
 import com.pizza.auth.dto.RegisterResponse;
+import com.pizza.auth.dto.UserLookupResponse;
 import com.pizza.auth.dto.UserResponse;
 import com.pizza.auth.exception.EmailAlreadyExistsException;
 import com.pizza.auth.exception.InvalidCurrentPasswordException;
 import com.pizza.auth.exception.InvalidTokenException;
+import com.pizza.auth.exception.UserNotFoundException;
 import com.pizza.auth.exception.UsernameAlreadyExistsException;
 import com.pizza.auth.security.RefreshTokenService;
 import com.pizza.auth.security.VerificationTokenService;
@@ -118,6 +120,7 @@ public class UserServiceImpl implements UserService {
         return new UserResponse(
                 user.getId(),
                 user.getEmail(),
+                user.getUsername(),
                 user.getFullName(),
                 user.getStatus(),
                 user.getEmailVerifiedAt(),
@@ -135,5 +138,21 @@ public class UserServiceImpl implements UserService {
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
         refreshTokenService.revokeAllForUser(userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserLookupResponse lookup(String q) {
+        if (q == null || q.isBlank()) {
+            throw new UserNotFoundException();
+        }
+        String identifier = q.trim().toLowerCase();
+        User user = userRepository.findByEmailOrUsername(identifier)
+                .orElseThrow(() -> new UserNotFoundException());
+        return new UserLookupResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getUsername(),
+                user.getFullName());
     }
 }

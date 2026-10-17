@@ -121,11 +121,4 @@ public class AuthController {
         userService.changePassword(userId, request);
         return ResponseEntity.ok(Map.of("message", "Password changed successfully"));
     }
-
-    @GetMapping("/api/v1/users/lookup")
-    public ResponseEntity<UserLookupResponse> lookup(
-            @RequestParam("q") String q,
-            Authentication auth) {
-        return ResponseEntity.ok(userService.lookup(q));
-    }
 }

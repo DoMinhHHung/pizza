@@ -11,21 +11,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.pizza.auth.dto.ChangePasswordRequest;
-import com.pizza.auth.dto.RegisterRequest;
-import com.pizza.auth.dto.RegisterResponse;
-import com.pizza.auth.dto.UserResponse;
-import com.pizza.auth.exception.EmailAlreadyExistsException;
-import com.pizza.auth.exception.InvalidCurrentPasswordException;
-import com.pizza.auth.exception.InvalidTokenException;
-import com.pizza.auth.security.RefreshTokenService;
-import com.pizza.auth.security.VerificationTokenService;
-import com.pizza.auth.user.AccountStatus;
-import com.pizza.auth.user.User;
-import com.pizza.auth.user.UserRepository;
 import java.lang.reflect.Field;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,14 +23,34 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.pizza.auth.dto.ChangePasswordRequest;
+import com.pizza.auth.dto.RegisterRequest;
+import com.pizza.auth.dto.RegisterResponse;
+import com.pizza.auth.dto.UserLookupResponse;
+import com.pizza.auth.dto.UserResponse;
+import com.pizza.auth.exception.EmailAlreadyExistsException;
+import com.pizza.auth.exception.InvalidCurrentPasswordException;
+import com.pizza.auth.exception.InvalidTokenException;
+import com.pizza.auth.exception.UsernameAlreadyExistsException;
+import com.pizza.auth.security.RefreshTokenService;
+import com.pizza.auth.security.VerificationTokenService;
+import com.pizza.auth.user.AccountStatus;
+import com.pizza.auth.user.User;
+import com.pizza.auth.user.UserRepository;
+
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
-    @Mock private UserRepository userRepository;
-    @Mock private PasswordEncoder passwordEncoder;
-    @Mock private VerificationTokenService verificationTokenService;
-    @Mock private EmailService emailService;
-    @Mock private RefreshTokenService refreshTokenService;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PasswordEncoder passwordEncoder;
+    @Mock
+    private VerificationTokenService verificationTokenService;
+    @Mock
+    private EmailService emailService;
+    @Mock
+    private RefreshTokenService refreshTokenService;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -52,6 +61,7 @@ class UserServiceTest {
     void setUp() {
         request = new RegisterRequest();
         request.setEmail("Test.User@Example.COM");
+        request.setUsername("test_user");
         request.setPassword("Str0ngP@ss!");
         request.setFullName("Nguyen Van A");
     }
@@ -59,6 +69,7 @@ class UserServiceTest {
     @Test
     void register_success() throws Exception {
         when(userRepository.existsByEmail("test.user@example.com")).thenReturn(false);
+        when(userRepository.existsByUsername("test_user")).thenReturn(false);
         when(passwordEncoder.encode("Str0ngP@ss!")).thenReturn("hashed-password");
         when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
             User u = invocation.getArgument(0);
@@ -73,6 +84,7 @@ class UserServiceTest {
         RegisterResponse response = userService.register(request);
 
         assertThat(response.getEmail()).isEqualTo("test.user@example.com");
+        assertThat(response.getUsername()).isEqualTo("test_user");
         assertThat(response.getFullName()).isEqualTo("Nguyen Van A");
         assertThat(response.getStatus()).isEqualTo(AccountStatus.PENDING_VERIFICATION);
         verify(emailService).sendVerificationEmail(eq("test.user@example.com"), eq("verify-token"));
@@ -88,8 +100,18 @@ class UserServiceTest {
     }
 
     @Test
+    void register_usernameAlreadyExists_throws() {
+        when(userRepository.existsByEmail("test.user@example.com")).thenReturn(false);
+        when(userRepository.existsByUsername("test_user")).thenReturn(true);
+        assertThatThrownBy(() -> userService.register(request))
+                .isInstanceOf(UsernameAlreadyExistsException.class);
+        verify(userRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void register_mailFailure_stillSucceeds() throws Exception {
         when(userRepository.existsByEmail("test.user@example.com")).thenReturn(false);
+        when(userRepository.existsByUsername("test_user")).thenReturn(false);
         when(passwordEncoder.encode("Str0ngP@ss!")).thenReturn("hashed-password");
         when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
             User u = invocation.getArgument(0);
@@ -104,12 +126,13 @@ class UserServiceTest {
 
         RegisterResponse response = userService.register(request);
         assertThat(response.getEmail()).isEqualTo("test.user@example.com");
+        assertThat(response.getUsername()).isEqualTo("test_user");
     }
 
     @Test
     void verifyEmail_success() {
         UUID userId = UUID.randomUUID();
-        User user = new User("user@example.com", "hash", "Name");
+        User user = new User("user@example.com", "testuser", "hash", "Name");
         when(verificationTokenService.consume("good-token")).thenReturn(Optional.of(userId));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
@@ -123,7 +146,7 @@ class UserServiceTest {
     @Test
     void verifyEmail_notPending_noChange() {
         UUID userId = UUID.randomUUID();
-        User user = new User("user@example.com", "hash", "Name");
+        User user = new User("user@example.com", "testuser", "hash", "Name");
         user.setStatus(AccountStatus.DISABLED);
         when(verificationTokenService.consume("good-token")).thenReturn(Optional.of(userId));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -144,19 +167,39 @@ class UserServiceTest {
     @Test
     void getCurrentUser_success() {
         UUID userId = UUID.randomUUID();
-        User user = new User("user@example.com", "hash", "Name");
+        User user = new User("user@example.com", "testuser", "hash", "Name");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         UserResponse response = userService.getCurrentUser(userId);
 
         assertThat(response.getEmail()).isEqualTo("user@example.com");
+        assertThat(response.getUsername()).isEqualTo("testuser");
         assertThat(response.getFullName()).isEqualTo("Name");
+    }
+
+    @Test
+    void lookup_success() {
+        User user = new User("user@example.com", "testuser", "hash", "Name");
+        when(userRepository.findByEmailOrUsername("testuser")).thenReturn(Optional.of(user));
+
+        UserLookupResponse response = userService.lookup("testuser");
+
+        assertThat(response.getEmail()).isEqualTo("user@example.com");
+        assertThat(response.getUsername()).isEqualTo("testuser");
+        assertThat(response.getFullName()).isEqualTo("Name");
+    }
+
+    @Test
+    void lookup_notFound_throws() {
+        when(userRepository.findByEmailOrUsername("missing")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> userService.lookup("missing"))
+                .isInstanceOf(InvalidTokenException.class);
     }
 
     @Test
     void changePassword_success() {
         UUID userId = UUID.randomUUID();
-        User user = new User("user@example.com", "old-hash", "Name");
+        User user = new User("user@example.com", "testuser", "old-hash", "Name");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("oldPass", "old-hash")).thenReturn(true);
         when(passwordEncoder.encode("newPass")).thenReturn("new-hash");
@@ -175,7 +218,7 @@ class UserServiceTest {
     @Test
     void changePassword_wrongCurrent_throws() {
         UUID userId = UUID.randomUUID();
-        User user = new User("user@example.com", "old-hash", "Name");
+        User user = new User("user@example.com", "testuser", "old-hash", "Name");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong", "old-hash")).thenReturn(false);
 
