@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -22,6 +23,7 @@ type Server struct {
 	apiKeys   controlv1.ApiKeyServiceServer
 	mux       *http.ServeMux
 	marshal   protojson.MarshalOptions
+	ping      func(ctx context.Context) error
 }
 
 func New(
@@ -29,12 +31,14 @@ func New(
 	orgs controlv1.OrganizationServiceServer,
 	projects controlv1.ProjectServiceServer,
 	apiKeys controlv1.ApiKeyServiceServer,
+	ping func(ctx context.Context) error,
 ) *Server {
 	s := &Server{
 		validator: validator,
 		orgs:      orgs,
 		projects:  projects,
 		apiKeys:   apiKeys,
+		ping:      ping,
 		mux:       http.NewServeMux(),
 		marshal:   protojson.MarshalOptions{UseProtoNames: false, EmitUnpopulated: true},
 	}
@@ -48,6 +52,17 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if s.ping != nil {
+			if err := s.ping(ctx); err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+					"status": "DOWN",
+					"error":  "database unavailable",
+				})
+				return
+			}
+		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "UP"})
 	})
 
@@ -64,6 +79,9 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/v1/projects/{projectId}/api-keys", authz(http.HandlerFunc(s.listApiKeys)))
 	s.mux.Handle("POST /api/v1/projects/{projectId}/api-keys", authz(http.HandlerFunc(s.createApiKey)))
 	s.mux.Handle("DELETE /api/v1/api-keys/{id}", authz(http.HandlerFunc(s.revokeApiKey)))
+	s.mux.Handle("GET /api/v1/projects/{projectId}", authz(http.HandlerFunc(s.getProject)))
+	s.mux.Handle("PATCH /api/v1/projects/{projectId}", authz(http.HandlerFunc(s.updateProject)))
+	s.mux.Handle("DELETE /api/v1/projects/{projectId}", authz(http.HandlerFunc(s.deleteProject)))
 }
 
 func (s *Server) listOrgs(w http.ResponseWriter, r *http.Request) {
@@ -273,6 +291,41 @@ func (s *Server) cors(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) getProject(w http.ResponseWriter, r *http.Request) {
+	resp, err := s.projects.GetProject(r.Context(), &controlv1.GetProjectRequest{
+		ProjectId: r.PathValue("projectId"),
+	})
+	s.writeProto(w, resp, err)
+}
+
+func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
+		return
+	}
+	resp, err := s.projects.UpdateProject(r.Context(), &controlv1.UpdateProjectRequest{
+		ProjectId: r.PathValue("projectId"),
+		Name:      body.Name,
+		Slug:      body.Slug,
+	})
+	s.writeProto(w, resp, err)
+}
+
+func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
+	_, err := s.projects.DeleteProject(r.Context(), &controlv1.DeleteProjectRequest{
+		ProjectId: r.PathValue("projectId"),
+	})
+	if err != nil {
+		s.writeGRPCError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func ListenAndServe(addr string, handler http.Handler) error {

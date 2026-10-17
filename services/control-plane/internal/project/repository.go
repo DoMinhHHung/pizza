@@ -87,3 +87,35 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Project, error
 	}
 	return &p, nil
 }
+
+func (r *Repository) Update(ctx context.Context, id uuid.UUID, name, slug string) (*Project, error) {
+	var p Project
+	err := r.pool.QueryRow(ctx, `
+		UPDATE control_plane.projects
+		SET name = COALESCE(NULLIF($2, ''), name),
+		    slug = COALESCE(NULLIF($3, ''), slug),
+		    updated_at = now()
+		WHERE id = $1
+		RETURNING id, org_id, name, slug, created_at, updated_at`,
+		id, name, slug,
+	).Scan(&p.ID, &p.OrgID, &p.Name, &p.Slug, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx, `
+		DELETE FROM control_plane.projects WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

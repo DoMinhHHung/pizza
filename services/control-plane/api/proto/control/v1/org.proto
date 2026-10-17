@@ -14,6 +14,9 @@ service OrganizationService {
   rpc AddMember(AddMemberRequest) returns (Member);
   rpc UpdateMemberRole(UpdateMemberRoleRequest) returns (Member);
   rpc RemoveMember(RemoveMemberRequest) returns (google.protobuf.Empty);
+  rpc GetOrganization(GetOrganizationRequest) returns (Organization);
+  rpc UpdateOrganization(UpdateOrganizationRequest) returns (Organization);
+  rpc DeleteOrganization(DeleteOrganizationRequest) returns (google.protobuf.Empty);
 }
 
 message CreateOrganizationRequest {
@@ -54,6 +57,20 @@ message UpdateMemberRoleRequest {
   string org_id = 1;
   string user_id = 2;
   string role = 3;
+}
+
+message GetOrganizationRequest {
+  string org_id = 1;
+}
+
+message UpdateOrganizationRequest {
+  string org_id = 1;
+  string name = 2;  // optional update — empty = keep
+  string slug = 3;  // optional update — empty = keep
+}
+
+message DeleteOrganizationRequest {
+  string org_id = 1;
 }
 
 message RemoveMemberRequest {

@@ -261,3 +261,99 @@ func toMemberProto(m *Member) *controlv1.Member {
 		CreatedAt: timestamppb.New(m.CreatedAt),
 	}
 }
+
+func (s *Service) GetOrganization(ctx context.Context, req *controlv1.GetOrganizationRequest) (*controlv1.Organization, error) {
+	userID, err := auth.UserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := uuid.Parse(req.GetOrgId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid org_id")
+	}
+	member, err := s.requireMember(ctx, orgID, userID)
+	if err != nil {
+		return nil, err
+	}
+	o, err := s.repo.GetByID(ctx, orgID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "organization not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to get organization")
+	}
+	return toOrgProto(o, member.Role), nil
+}
+
+func (s *Service) UpdateOrganization(ctx context.Context, req *controlv1.UpdateOrganizationRequest) (*controlv1.Organization, error) {
+	userID, err := auth.UserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := uuid.Parse(req.GetOrgId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid org_id")
+	}
+	member, err := s.requireMember(ctx, orgID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if member.Role != RoleOwner && member.Role != RoleAdmin {
+		return nil, status.Error(codes.PermissionDenied, "insufficient role to update organization")
+	}
+
+	name := strings.TrimSpace(req.GetName())
+	slug := strings.TrimSpace(strings.ToLower(req.GetSlug()))
+	if slug != "" && (len(slug) > 50 || !slugRegex.MatchString(slug)) {
+		return nil, status.Error(codes.InvalidArgument, "invalid slug")
+	}
+	if name != "" && len(name) > 100 {
+		return nil, status.Error(codes.InvalidArgument, "name too long")
+	}
+	if slug != "" {
+		exists, err := s.repo.ExistsBySlug(ctx, slug)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to check slug")
+		}
+		if exists {
+			current, _ := s.repo.GetByID(ctx, orgID)
+			if current == nil || current.Slug != slug {
+				return nil, status.Error(codes.AlreadyExists, "slug already taken")
+			}
+		}
+	}
+
+	o, err := s.repo.Update(ctx, orgID, name, slug)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "organization not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to update organization")
+	}
+	return toOrgProto(o, member.Role), nil
+}
+
+func (s *Service) DeleteOrganization(ctx context.Context, req *controlv1.DeleteOrganizationRequest) (*emptypb.Empty, error) {
+	userID, err := auth.UserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := uuid.Parse(req.GetOrgId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid org_id")
+	}
+	member, err := s.requireMember(ctx, orgID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if member.Role != RoleOwner {
+		return nil, status.Error(codes.PermissionDenied, "only OWNER can delete organization")
+	}
+	if err := s.repo.Delete(ctx, orgID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "organization not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to delete organization")
+	}
+	return &emptypb.Empty{}, nil
+}

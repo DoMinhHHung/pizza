@@ -196,3 +196,52 @@ func (r *Repository) CountOwners(ctx context.Context, orgID uuid.UUID) (int, err
 	).Scan(&n)
 	return n, err
 }
+
+func (r *Repository) GetByID(ctx context.Context, orgID uuid.UUID) (*Organization, error) {
+	var o Organization
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, name, slug, created_at, updated_at
+		FROM control_plane.organizations
+		WHERE id = $1`, orgID).Scan(
+		&o.ID, &o.Name, &o.Slug, &o.CreatedAt, &o.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &o, nil
+}
+
+func (r *Repository) Update(ctx context.Context, orgID uuid.UUID, name, slug string) (*Organization, error) {
+	var o Organization
+	err := r.pool.QueryRow(ctx, `
+		UPDATE control_plane.organizations
+		SET name = COALESCE(NULLIF($2, ''), name),
+		    slug = COALESCE(NULLIF($3, ''), slug),
+		    updated_at = now()
+		WHERE id = $1
+		RETURNING id, name, slug, created_at, updated_at`,
+		orgID, name, slug,
+	).Scan(&o.ID, &o.Name, &o.Slug, &o.CreatedAt, &o.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &o, nil
+}
+
+func (r *Repository) Delete(ctx context.Context, orgID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx, `
+		DELETE FROM control_plane.organizations WHERE id = $1`, orgID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -110,4 +112,135 @@ func toProto(p *Project) *controlv1.Project {
 		CreatedAt: timestamppb.New(p.CreatedAt),
 		UpdatedAt: timestamppb.New(p.UpdatedAt),
 	}
+}
+
+func (s *Service) GetProject(ctx context.Context, req *controlv1.GetProjectRequest) (*controlv1.Project, error) {
+	userID, err := auth.UserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	projectID, err := uuid.Parse(req.GetProjectId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid project_id")
+	}
+
+	p, err := s.repo.GetByID(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "project not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to get project")
+	}
+
+	ok, err := s.orgRepo.HasMember(ctx, p.OrgID, userID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to check membership")
+	}
+	if !ok {
+		return nil, status.Error(codes.PermissionDenied, "not a member of this organization")
+	}
+
+	return toProto(p), nil
+}
+
+func (s *Service) UpdateProject(ctx context.Context, req *controlv1.UpdateProjectRequest) (*controlv1.Project, error) {
+	userID, err := auth.UserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	projectID, err := uuid.Parse(req.GetProjectId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid project_id")
+	}
+
+	p, err := s.repo.GetByID(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "project not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to get project")
+	}
+
+	member, err := s.orgRepo.GetMember(ctx, p.OrgID, userID)
+	if err != nil {
+		if errors.Is(err, org.ErrNotFound) {
+			return nil, status.Error(codes.PermissionDenied, "not a member of this organization")
+		}
+		return nil, status.Error(codes.Internal, "failed to check membership")
+	}
+	if member.Role != org.RoleOwner && member.Role != org.RoleAdmin {
+		return nil, status.Error(codes.PermissionDenied, "insufficient role to update project")
+	}
+
+	name := strings.TrimSpace(req.GetName())
+	slug := strings.TrimSpace(strings.ToLower(req.GetSlug()))
+
+	if name != "" && len(name) > 100 {
+		return nil, status.Error(codes.InvalidArgument, "name must be 1-100 characters")
+	}
+	if slug != "" && (len(slug) > 50 || !slugRegex.MatchString(slug)) {
+		return nil, status.Error(codes.InvalidArgument, "slug must be lowercase alphanumeric with hyphens")
+	}
+
+	if slug != "" && slug != p.Slug {
+		exists, err := s.repo.ExistsByOrgAndSlug(ctx, p.OrgID, slug)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to check slug")
+		}
+		if exists {
+			return nil, status.Error(codes.AlreadyExists, "project slug already exists in this organization")
+		}
+	}
+
+	updated, err := s.repo.Update(ctx, projectID, name, slug)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "project not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to update project")
+	}
+
+	return toProto(updated), nil
+}
+
+func (s *Service) DeleteProject(ctx context.Context, req *controlv1.DeleteProjectRequest) (*emptypb.Empty, error) {
+	userID, err := auth.UserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	projectID, err := uuid.Parse(req.GetProjectId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid project_id")
+	}
+
+	p, err := s.repo.GetByID(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "project not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to get project")
+	}
+
+	member, err := s.orgRepo.GetMember(ctx, p.OrgID, userID)
+	if err != nil {
+		if errors.Is(err, org.ErrNotFound) {
+			return nil, status.Error(codes.PermissionDenied, "not a member of this organization")
+		}
+		return nil, status.Error(codes.Internal, "failed to check membership")
+	}
+	if member.Role != org.RoleOwner && member.Role != org.RoleAdmin {
+		return nil, status.Error(codes.PermissionDenied, "insufficient role to delete project")
+	}
+
+	if err := s.repo.Delete(ctx, projectID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "project not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to delete project")
+	}
+
+	return &emptypb.Empty{}, nil
 }

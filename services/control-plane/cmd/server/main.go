@@ -74,7 +74,7 @@ func main() {
 		}
 	}()
 
-	httpServer := httpapi.New(validator, orgService, projectService, apiKeyService)
+	httpServer := httpapi.New(validator, orgService, projectService, apiKeyService, pool.Ping)
 	go func() {
 		addr := ":" + cfg.HTTPPort
 		slog.Info("HTTP API starting", "port", cfg.HTTPPort)
