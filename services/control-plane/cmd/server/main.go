@@ -17,6 +17,7 @@ import (
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/auth"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/config"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/db"
+	"github.com/DoMinhHHung/pizza/services/control-plane/internal/httpapi"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/org"
 	"github.com/DoMinhHHung/pizza/services/control-plane/internal/project"
 )
@@ -42,7 +43,7 @@ func main() {
 
 	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
-		slog.Error("listen", "error", err)
+		slog.Error("listen grpc", "error", err)
 		os.Exit(1)
 	}
 
@@ -63,12 +64,22 @@ func main() {
 	controlv1.RegisterOrganizationServiceServer(grpcServer, orgService)
 	controlv1.RegisterProjectServiceServer(grpcServer, projectService)
 	controlv1.RegisterApiKeyServiceServer(grpcServer, apiKeyService)
-
 	reflection.Register(grpcServer)
+
 	go func() {
 		slog.Info("gRPC server starting", "port", cfg.GRPCPort)
 		if err := grpcServer.Serve(lis); err != nil {
 			slog.Error("gRPC server failed", "error", err)
+			stop()
+		}
+	}()
+
+	httpServer := httpapi.New(validator, orgService, projectService, apiKeyService)
+	go func() {
+		addr := ":" + cfg.HTTPPort
+		slog.Info("HTTP API starting", "port", cfg.HTTPPort)
+		if err := httpapi.ListenAndServe(addr, httpServer.Handler()); err != nil {
+			slog.Error("HTTP server failed", "error", err)
 			stop()
 		}
 	}()
