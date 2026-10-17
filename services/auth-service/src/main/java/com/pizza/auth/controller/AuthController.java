@@ -89,7 +89,7 @@ public class AuthController {
 
     @PostMapping("/resend-verification")
     public ResponseEntity<Map<String, String>> resendVerification(@Valid @RequestBody ForgotPasswordRequest request) {
-        userService.resendVerification(request.getEmail());
+        userService.resendVerification(request.getIdentifier());
         return ResponseEntity
                 .ok(Map.of("message", "If the email exists and is not verified, a verification link has been sent"));
     }
@@ -120,5 +120,12 @@ public class AuthController {
         UUID userId = (UUID) authentication.getPrincipal();
         userService.changePassword(userId, request);
         return ResponseEntity.ok(Map.of("message", "Password changed successfully"));
+    }
+
+    @GetMapping("/api/v1/users/lookup")
+    public ResponseEntity<UserLookupResponse> lookup(
+            @RequestParam("q") String q,
+            Authentication auth) {
+        return ResponseEntity.ok(userService.lookup(q));
     }
 }

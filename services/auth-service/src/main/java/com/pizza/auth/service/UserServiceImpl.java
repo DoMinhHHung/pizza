@@ -17,6 +17,7 @@ import com.pizza.auth.dto.UserResponse;
 import com.pizza.auth.exception.EmailAlreadyExistsException;
 import com.pizza.auth.exception.InvalidCurrentPasswordException;
 import com.pizza.auth.exception.InvalidTokenException;
+import com.pizza.auth.exception.UsernameAlreadyExistsException;
 import com.pizza.auth.security.RefreshTokenService;
 import com.pizza.auth.security.VerificationTokenService;
 import com.pizza.auth.user.AccountStatus;
@@ -50,11 +51,15 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
+        String normalizedUsername = request.getUsername().trim().toLowerCase();
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new EmailAlreadyExistsException(normalizedEmail);
         }
+        if (userRepository.existsByUsername(normalizedUsername)) {
+            throw new UsernameAlreadyExistsException(normalizedUsername);
+        }
         String passwordHash = passwordEncoder.encode(request.getPassword());
-        User user = new User(normalizedEmail, passwordHash, request.getFullName().trim());
+        User user = new User(normalizedEmail, normalizedUsername, passwordHash, request.getFullName().trim());
         try {
             User saved = userRepository.saveAndFlush(user);
             String token = verificationTokenService.create(saved.getId());
@@ -67,6 +72,7 @@ public class UserServiceImpl implements UserService {
                     saved.getId(),
                     saved.getEmail(),
                     saved.getFullName(),
+                    saved.getUsername(),
                     saved.getStatus());
         } catch (DataIntegrityViolationException ex) {
             throw new EmailAlreadyExistsException(normalizedEmail);

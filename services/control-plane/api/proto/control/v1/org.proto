@@ -51,6 +51,7 @@ message AddMemberRequest {
   string org_id = 1;
   string user_id = 2;
   string role = 3;
+  string identifier = 4;
 }
 
 message UpdateMemberRoleRequest {

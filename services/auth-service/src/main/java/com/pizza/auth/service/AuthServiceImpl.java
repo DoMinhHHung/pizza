@@ -70,16 +70,17 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(noRollbackFor = InvalidCredentialsException.class)
     public TokenResponse login(LoginRequest request) {
-        String email = request.getEmail().trim().toLowerCase();
+        String raw = request.getIdentifier().trim();
+        String identifier = raw.contains("@") ? raw.toLowerCase() : raw.toLowerCase();
 
-        if (loginAttemptService.isLocked(email)) {
+        if (loginAttemptService.isLocked(identifier)) {
             throw new AccountLockedException();
         }
 
-        User user = userRepository.findByEmail(email).orElse(null);
+        User user = userRepository.findByEmailOrUsername(identifier).orElse(null);
         if (user == null) {
             passwordEncoder.matches(request.getPassword(), dummyPasswordHash);
-            loginAttemptService.recordFailure(email);
+            loginAttemptService.recordFailure(identifier);
             throw new InvalidCredentialsException();
         }
 
@@ -88,8 +89,8 @@ public class AuthServiceImpl implements AuthService {
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            loginAttemptService.recordFailure(email);
-            if (loginAttemptService.isLocked(email)) {
+            loginAttemptService.recordFailure(identifier);
+            if (loginAttemptService.isLocked(identifier)) {
                 user.setLockedUntil(Instant.now().plus(securityProperties.getLockDuration()));
                 user.setStatus(AccountStatus.LOCKED);
                 userRepository.save(user);
@@ -110,7 +111,7 @@ public class AuthServiceImpl implements AuthService {
             throw new InvalidCredentialsException();
         }
 
-        loginAttemptService.clearFailures(email);
+        loginAttemptService.clearFailures(identifier);
         return issueTokens(user);
     }
 
@@ -162,8 +163,9 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(readOnly = true)
     public void forgotPassword(ForgotPasswordRequest request) {
-        String email = request.getEmail().trim().toLowerCase();
-        User user = userRepository.findByEmail(email).orElse(null);
+        String identifier = request.getIdentifier().trim();
+        String normalizedIdentifier = identifier.contains("@") ? identifier.toLowerCase() : identifier.toLowerCase();
+        User user = userRepository.findByEmailOrUsername(normalizedIdentifier).orElse(null);
         if (user == null) {
             return;
         }
