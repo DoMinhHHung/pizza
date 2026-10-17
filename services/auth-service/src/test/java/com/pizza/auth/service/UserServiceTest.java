@@ -31,6 +31,7 @@ import com.pizza.auth.dto.UserResponse;
 import com.pizza.auth.exception.EmailAlreadyExistsException;
 import com.pizza.auth.exception.InvalidCurrentPasswordException;
 import com.pizza.auth.exception.InvalidTokenException;
+import com.pizza.auth.exception.UserNotFoundException;
 import com.pizza.auth.exception.UsernameAlreadyExistsException;
 import com.pizza.auth.security.RefreshTokenService;
 import com.pizza.auth.security.VerificationTokenService;
@@ -193,7 +194,13 @@ class UserServiceTest {
     void lookup_notFound_throws() {
         when(userRepository.findByEmailOrUsername("missing")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> userService.lookup("missing"))
-                .isInstanceOf(InvalidTokenException.class);
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    void lookup_blankQuery_throws() {
+        assertThatThrownBy(() -> userService.lookup("   "))
+                .isInstanceOf(UserNotFoundException.class);
     }
 
     @Test

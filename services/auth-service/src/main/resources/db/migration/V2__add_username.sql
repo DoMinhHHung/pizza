@@ -2,11 +2,11 @@ ALTER TABLE users
     ADD COLUMN username VARCHAR(30);
 
 UPDATE users
-SET username = LOWER(REGEXP_REPLACE(SPLIT_PART(email, '@', 1), '[^a-z0-9_]', '', 'g'))
+SET username = REGEXP_REPLACE(LOWER(SUBSTRING(email, 1, POSITION('@' IN email) - 1)), '[^a-z0-9_]', '', 'g')
 WHERE username IS NULL;
 
 UPDATE users u
-SET username = u.username || '_' || SUBSTRING(REPLACE(u.id::text, '-', ''), 1, 6)
+SET username = u.username || '_' || SUBSTRING(REPLACE(CAST(u.id AS VARCHAR), '-', ''), 1, 6)
 WHERE u.id IN (
     SELECT id FROM (
         SELECT id, ROW_NUMBER() OVER (PARTITION BY username ORDER BY created_at) AS rn
