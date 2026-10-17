@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package control.v1;
+
+option go_package = "github.com/DoMinhHHung/pizza/services/control-plane/api/gen/control/v1;controlv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+service OrganizationService {
+  rpc CreateOrganization(CreateOrganizationRequest) returns (Organization);
+  rpc ListMyOrganizations(ListMyOrganizationsRequest) returns (ListMyOrganizationsResponse);
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+  rpc AddMember(AddMemberRequest) returns (Member);
+  rpc UpdateMemberRole(UpdateMemberRoleRequest) returns (Member);
+  rpc RemoveMember(RemoveMemberRequest) returns (google.protobuf.Empty);
+  rpc GetOrganization(GetOrganizationRequest) returns (Organization);
+  rpc UpdateOrganization(UpdateOrganizationRequest) returns (Organization);
+  rpc DeleteOrganization(DeleteOrganizationRequest) returns (google.protobuf.Empty);
+}
+
+message CreateOrganizationRequest {
+  string name = 1;
+  string slug = 2;
+}
+
+message ListMyOrganizationsRequest {}
+
+message ListMyOrganizationsResponse {
+  repeated Organization organizations = 1;
+}
+
+message Organization {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string role = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message ListMembersRequest {
+  string org_id = 1;
+}
+
+message ListMembersResponse {
+  repeated Member members = 1;
+}
+
+message AddMemberRequest {
+  string org_id = 1;
+  string user_id = 2;
+  string role = 3;
+  string identifier = 4;
+}
+
+message UpdateMemberRoleRequest {
+  string org_id = 1;
+  string user_id = 2;
+  string role = 3;
+}
+
+message GetOrganizationRequest {
+  string org_id = 1;
+}
+
+message UpdateOrganizationRequest {
+  string org_id = 1;
+  string name = 2;  // optional update — empty = keep
+  string slug = 3;  // optional update — empty = keep
+}
+
+message DeleteOrganizationRequest {
+  string org_id = 1;
+}
+
+message RemoveMemberRequest {
+  string org_id = 1;
+  string user_id = 2;
+}
+
+message Member {
+  string org_id = 1;
+  string user_id = 2;
+  string role = 3;
+  google.protobuf.Timestamp created_at = 4;
+}

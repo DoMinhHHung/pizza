@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package control.v1;
+
+option go_package = "github.com/DoMinhHHung/pizza/services/control-plane/api/gen/control/v1;controlv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+service ApiKeyService {
+  rpc CreateApiKey(CreateApiKeyRequest) returns (CreateApiKeyResponse);
+  rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse);
+  rpc RevokeApiKey(RevokeApiKeyRequest) returns (google.protobuf.Empty);
+}
+
+message CreateApiKeyRequest {
+  string project_id = 1;
+  string name = 2;
+}
+
+message CreateApiKeyResponse {
+  ApiKey api_key = 1;
+  string secret = 2;
+}
+
+message ListApiKeysRequest {
+  string project_id = 1;
+}
+
+message ListApiKeysResponse {
+  repeated ApiKey api_keys = 1;
+}
+
+message RevokeApiKeyRequest {
+  string id = 1;
+}
+
+message ApiKey {
+  string id = 1;
+  string project_id = 2;
+  string name = 3;
+  string key_prefix = 4;
+  string created_by = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp revoked_at = 7;
+  google.protobuf.Timestamp last_used_at = 8;
+}
