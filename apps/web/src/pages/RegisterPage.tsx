@@ -5,6 +5,7 @@ import { AuthCard } from '../components/AuthCard'
 
 export function RegisterPage() {
   const [fullName, setFullName] = useState('')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -19,6 +20,7 @@ export function RegisterPage() {
     try {
       const res = await authApi.register({
         email: email.trim(),
+        username: username.trim().toLowerCase(),
         password,
         fullName: fullName.trim(),
       })
@@ -44,6 +46,21 @@ export function RegisterPage() {
             required
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="username">Username</label>
+          <input
+            id="username"
+            type="text"
+            autoComplete="username"
+            required
+            minLength={3}
+            maxLength={30}
+            pattern="[a-zA-Z0-9_]+"
+            title="3–30 characters: letters, numbers, underscore"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
           />
         </div>
         <div className="field">
