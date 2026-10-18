@@ -154,9 +154,6 @@ func (s *Service) UpdateMemberRole(ctx context.Context, req *controlv1.UpdateMem
 	if actor.Role != RoleOwner {
 		return nil, status.Error(codes.PermissionDenied, "only OWNER can change roles")
 	}
-	if actor.Role != RoleOwner {
-		return nil, status.Error(codes.PermissionDenied, "only OWNER can change roles")
-	}
 
 	updated, err := s.repo.UpdateMemberRoleGuarded(ctx, orgID, targetID, newRole)
 	if err != nil {
@@ -200,8 +197,8 @@ func (s *Service) RemoveMember(ctx context.Context, req *controlv1.RemoveMemberR
 		return nil, status.Error(codes.Internal, "failed to get member")
 	}
 
-	if target.Role == RoleAdmin && actor.Role != RoleOwner {
-		return nil, status.Error(codes.PermissionDenied, "only OWNER can remove an ADMIN")
+	if actor.Role != RoleOwner && target.Role != RoleMember {
+		return nil, status.Error(codes.PermissionDenied, "only OWNER can remove an ADMIN or OWNER")
 	}
 
 	if err := s.repo.RemoveMemberGuarded(ctx, orgID, targetID); err != nil {
