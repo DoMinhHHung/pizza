@@ -332,6 +332,7 @@ type AddMemberRequest struct {
 	OrgId         string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	Role          string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
+	Identifier    string                 `protobuf:"bytes,4,opt,name=identifier,proto3" json:"identifier,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -383,6 +384,13 @@ func (x *AddMemberRequest) GetUserId() string {
 func (x *AddMemberRequest) GetRole() string {
 	if x != nil {
 		return x.Role
+	}
+	return ""
+}
+
+func (x *AddMemberRequest) GetIdentifier() string {
+	if x != nil {
+		return x.Identifier
 	}
 	return ""
 }
@@ -739,11 +747,14 @@ const file_control_v1_org_proto_rawDesc = "" +
 	"\x12ListMembersRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\"C\n" +
 	"\x13ListMembersResponse\x12,\n" +
-	"\amembers\x18\x01 \x03(\v2\x12.control.v1.MemberR\amembers\"V\n" +
+	"\amembers\x18\x01 \x03(\v2\x12.control.v1.MemberR\amembers\"v\n" +
 	"\x10AddMemberRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role\"]\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x12\x1e\n" +
+	"\n" +
+	"identifier\x18\x04 \x01(\tR\n" +
+	"identifier\"]\n" +
 	"\x17UpdateMemberRoleRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x12\n" +
