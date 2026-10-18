@@ -2,6 +2,8 @@ import { clearTokens, getAccessToken, getRefreshToken, setTokens } from '../lib/
 
 const AUTH_BASE = (import.meta.env.VITE_AUTH_URL || '').replace(/\/$/, '')
 
+let refreshInFlight: Promise<boolean> | null = null
+
 export class ApiError extends Error {
   status: number
   body: unknown
@@ -53,7 +55,7 @@ export async function authFetch<T>(
   let res = await fetch(`${AUTH_BASE}${path}`, { ...rest, headers })
 
   if (res.status === 401 && auth && getRefreshToken()) {
-    const refreshed = await tryRefresh()
+    const refreshed = await ensureFreshAccessToken()
     if (refreshed) {
       headers.set('Authorization', `Bearer ${getAccessToken()}`)
       res = await fetch(`${AUTH_BASE}${path}`, { ...rest, headers })
@@ -65,6 +67,17 @@ export async function authFetch<T>(
     throw new ApiError(res.status, messageFromBody(body, res.statusText), body)
   }
   return body as T
+}
+
+/** Exported so control.ts can reuse the same refresh path. */
+export async function ensureFreshAccessToken(): Promise<boolean> {
+  if (!getRefreshToken()) return false
+  if (!refreshInFlight) {
+    refreshInFlight = tryRefresh().finally(() => {
+      refreshInFlight = null
+    })
+  }
+  return refreshInFlight
 }
 
 async function tryRefresh(): Promise<boolean> {
@@ -94,6 +107,7 @@ async function tryRefresh(): Promise<boolean> {
 
 export type RegisterPayload = {
   email: string
+  username: string
   password: string
   fullName: string
 }
@@ -115,6 +129,7 @@ export type TokenResult = {
 export type UserResult = {
   id: string
   email: string
+  username?: string
   fullName: string
   status: string
   emailVerifiedAt: string | null
@@ -128,10 +143,10 @@ export const authApi = {
       body: JSON.stringify(data),
     }),
 
-  login: (email: string, password: string) =>
+  login: (identifier: string, password: string) =>
     authFetch<TokenResult>('/api/v1/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ identifier, password }),
     }),
 
   logout: async () => {
@@ -157,16 +172,16 @@ export const authApi = {
       body: JSON.stringify({ token }),
     }),
 
-  resendVerification: (email: string) =>
+  resendVerification: (identifier: string) =>
     authFetch<{ message: string }>('/api/v1/auth/resend-verification', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ identifier }),
     }),
 
-  forgotPassword: (email: string) =>
+  forgotPassword: (identifier: string) =>
     authFetch<{ message: string }>('/api/v1/auth/forgot-password', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ identifier }),
     }),
 
   resetPassword: (token: string, newPassword: string) =>

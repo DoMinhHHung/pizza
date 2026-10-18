@@ -1,5 +1,5 @@
 import { getAccessToken } from '../lib/auth-storage'
-import { ApiError } from './client'
+import { ApiError, ensureFreshAccessToken } from './client'
 
 const CONTROL_BASE = (import.meta.env.VITE_CONTROL_URL || 'http://localhost:8081').replace(/\/$/, '')
 
@@ -8,10 +8,20 @@ async function controlFetch<T>(path: string, options: RequestInit = {}): Promise
   if (!headers.has('Content-Type') && options.body) {
     headers.set('Content-Type', 'application/json')
   }
-  const token = getAccessToken()
-  if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const res = await fetch(`${CONTROL_BASE}${path}`, { ...options, headers })
+  const doFetch = async () => {
+    const token = getAccessToken()
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    else headers.delete('Authorization')
+    return fetch(`${CONTROL_BASE}${path}`, { ...options, headers })
+  }
+
+  let res = await doFetch()
+  if (res.status === 401) {
+    const ok = await ensureFreshAccessToken()
+    if (ok) res = await doFetch()
+  }
+
   if (res.status === 204) return undefined as T
   const text = await res.text()
   let body: unknown = null
