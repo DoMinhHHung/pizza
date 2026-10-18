@@ -117,8 +117,7 @@ func (s *Server) createOrg(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 		Slug string `json:"slug"`
 	}
-	if err := decodeJSON; err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
+	if !decodeJSON(w, r, &body) {
 		return
 	}
 	resp, err := s.orgs.CreateOrganization(r.Context(), &controlv1.CreateOrganizationRequest{
@@ -140,8 +139,7 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 		UserID string `json:"userId"`
 		Role   string `json:"role"`
 	}
-	if err := decodeJSON; err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
+	if !decodeJSON(w, r, &body) {
 		return
 	}
 	resp, err := s.orgs.AddMember(r.Context(), &controlv1.AddMemberRequest{
@@ -156,8 +154,7 @@ func (s *Server) updateMemberRole(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Role string `json:"role"`
 	}
-	if err := decodeJSON; err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
+	if !decodeJSON(w, r, &body) {
 		return
 	}
 	resp, err := s.orgs.UpdateMemberRole(r.Context(), &controlv1.UpdateMemberRoleRequest{
@@ -192,8 +189,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 		Slug string `json:"slug"`
 	}
-	if err := decodeJSON; err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
+	if !decodeJSON(w, r, &body) {
 		return
 	}
 	resp, err := s.projects.CreateProject(r.Context(), &controlv1.CreateProjectRequest{
@@ -215,8 +211,7 @@ func (s *Server) createApiKey(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name string `json:"name"`
 	}
-	if err := decodeJSON; err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
+	if !decodeJSON(w, r, &body) {
 		return
 	}
 	resp, err := s.apiKeys.CreateApiKey(r.Context(), &controlv1.CreateApiKeyRequest{
@@ -328,8 +323,7 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 		Slug string `json:"slug"`
 	}
-	if err := decodeJSON; err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
+	if !decodeJSON(w, r, &body) {
 		return
 	}
 	resp, err := s.projects.UpdateProject(r.Context(), &controlv1.UpdateProjectRequest{
