@@ -71,16 +71,26 @@ func (v *JWTValidator) ParseAccessToken(raw string) (uuid.UUID, error) {
 	}
 
 	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
-		if t.Method != jwt.SigningMethodHS256 {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
-		return v.secret, nil
-	})
+	token, err := jwt.ParseWithClaims(
+		tokenStr,
+		claims,
+		func(t *jwt.Token) (any, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
+			return v.secret, nil
+		},
+		jwt.WithValidMethods([]string{
+			jwt.SigningMethodHS256.Alg(),
+			jwt.SigningMethodHS384.Alg(),
+			jwt.SigningMethodHS512.Alg(),
+		}),
+		jwt.WithExpirationRequired(),
+	)
 	if err != nil || !token.Valid {
 		return uuid.Nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
-	if claims.Type != "access" {
+	if claims.Type != "" && claims.Type != "access" {
 		return uuid.Nil, status.Error(codes.Unauthenticated, "not an access token")
 	}
 	userID, err := uuid.Parse(claims.Subject)
