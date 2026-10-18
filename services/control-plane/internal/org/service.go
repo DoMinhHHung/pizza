@@ -39,15 +39,12 @@ func (s *Service) CreateOrganization(ctx context.Context, req *controlv1.CreateO
 	if slug == "" || len(slug) > 50 || !slugRegex.MatchString(slug) {
 		return nil, status.Error(codes.InvalidArgument, "slug must be lowercase alphanumeric with hyphens")
 	}
-	exists, err := s.repo.ExistsBySlug(ctx, slug)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to check slug")
-	}
-	if exists {
-		return nil, status.Error(codes.AlreadyExists, "slug already taken")
-	}
+
 	org, err := s.repo.Create(ctx, name, slug, userID)
 	if err != nil {
+		if errors.Is(err, ErrSlugTaken) {
+			return nil, status.Error(codes.AlreadyExists, "slug already taken")
+		}
 		return nil, status.Error(codes.Internal, "failed to create organization")
 	}
 	return toOrgProto(org, RoleOwner), nil
@@ -122,15 +119,12 @@ func (s *Service) AddMember(ctx context.Context, req *controlv1.AddMemberRequest
 	if role == RoleAdmin && actor.Role != RoleOwner {
 		return nil, status.Error(codes.PermissionDenied, "only OWNER can add ADMIN")
 	}
-	exists, err := s.repo.HasMember(ctx, orgID, targetID)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to check membership")
-	}
-	if exists {
-		return nil, status.Error(codes.AlreadyExists, "user is already a member")
-	}
+
 	m, err := s.repo.AddMember(ctx, orgID, targetID, role)
 	if err != nil {
+		if errors.Is(err, ErrAlreadyMember) {
+			return nil, status.Error(codes.AlreadyExists, "user is already a member")
+		}
 		return nil, status.Error(codes.Internal, "failed to add member")
 	}
 	return toMemberProto(m), nil
@@ -160,27 +154,22 @@ func (s *Service) UpdateMemberRole(ctx context.Context, req *controlv1.UpdateMem
 	if actor.Role != RoleOwner {
 		return nil, status.Error(codes.PermissionDenied, "only OWNER can change roles")
 	}
-	target, err := s.repo.GetMember(ctx, orgID, targetID)
+	if actor.Role != RoleOwner {
+		return nil, status.Error(codes.PermissionDenied, "only OWNER can change roles")
+	}
+
+	updated, err := s.repo.UpdateMemberRoleGuarded(ctx, orgID, targetID, newRole)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
+		switch {
+		case errors.Is(err, ErrNotFound):
 			return nil, status.Error(codes.NotFound, "member not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get member")
-	}
-	if target.Role == RoleOwner && newRole != RoleOwner {
-		n, err := s.repo.CountOwners(ctx, orgID)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to count owners")
-		}
-		if n <= 1 {
+		case errors.Is(err, ErrLastOwner):
 			return nil, status.Error(codes.FailedPrecondition, "cannot demote the last OWNER")
+		default:
+			return nil, status.Error(codes.Internal, "failed to update role")
 		}
 	}
-	if err := s.repo.UpdateMemberRole(ctx, orgID, targetID, newRole); err != nil {
-		return nil, status.Error(codes.Internal, "failed to update role")
-	}
-	target.Role = newRole
-	return toMemberProto(target), nil
+	return toMemberProto(updated), nil
 }
 
 func (s *Service) RemoveMember(ctx context.Context, req *controlv1.RemoveMemberRequest) (*emptypb.Empty, error) {
@@ -210,23 +199,20 @@ func (s *Service) RemoveMember(ctx context.Context, req *controlv1.RemoveMemberR
 		}
 		return nil, status.Error(codes.Internal, "failed to get member")
 	}
-	if target.Role == RoleOwner {
-		if actor.Role != RoleOwner {
-			return nil, status.Error(codes.PermissionDenied, "only OWNER can remove an OWNER")
-		}
-		n, err := s.repo.CountOwners(ctx, orgID)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to count owners")
-		}
-		if n <= 1 {
-			return nil, status.Error(codes.FailedPrecondition, "cannot remove the last OWNER")
-		}
-	}
+
 	if target.Role == RoleAdmin && actor.Role != RoleOwner {
 		return nil, status.Error(codes.PermissionDenied, "only OWNER can remove an ADMIN")
 	}
-	if err := s.repo.RemoveMember(ctx, orgID, targetID); err != nil {
-		return nil, status.Error(codes.Internal, "failed to remove member")
+
+	if err := s.repo.RemoveMemberGuarded(ctx, orgID, targetID); err != nil {
+		switch {
+		case errors.Is(err, ErrNotFound):
+			return nil, status.Error(codes.NotFound, "member not found")
+		case errors.Is(err, ErrLastOwner):
+			return nil, status.Error(codes.FailedPrecondition, "cannot remove the last OWNER")
+		default:
+			return nil, status.Error(codes.Internal, "failed to remove member")
+		}
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -310,25 +296,17 @@ func (s *Service) UpdateOrganization(ctx context.Context, req *controlv1.UpdateO
 	if name != "" && len(name) > 100 {
 		return nil, status.Error(codes.InvalidArgument, "name too long")
 	}
-	if slug != "" {
-		exists, err := s.repo.ExistsBySlug(ctx, slug)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to check slug")
-		}
-		if exists {
-			current, _ := s.repo.GetByID(ctx, orgID)
-			if current == nil || current.Slug != slug {
-				return nil, status.Error(codes.AlreadyExists, "slug already taken")
-			}
-		}
-	}
 
 	o, err := s.repo.Update(ctx, orgID, name, slug)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
+		switch {
+		case errors.Is(err, ErrNotFound):
 			return nil, status.Error(codes.NotFound, "organization not found")
+		case errors.Is(err, ErrSlugTaken):
+			return nil, status.Error(codes.AlreadyExists, "slug already taken")
+		default:
+			return nil, status.Error(codes.Internal, "failed to update organization")
 		}
-		return nil, status.Error(codes.Internal, "failed to update organization")
 	}
 	return toOrgProto(o, member.Role), nil
 }

@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/DoMinhHHung/pizza/services/control-plane/internal/pgerr"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound  = errors.New("not found")
+	ErrSlugTaken = errors.New("slug already taken")
+)
 
 type Repository struct {
 	pool *pgxpool.Pool
@@ -36,6 +40,9 @@ func (r *Repository) Create(ctx context.Context, orgID uuid.UUID, name, slug str
 		p.ID, p.OrgID, p.Name, p.Slug, p.CreatedAt, p.UpdatedAt,
 	)
 	if err != nil {
+		if pgerr.IsUniqueViolation(err, "uq_projects_org_slug") {
+			return nil, ErrSlugTaken
+		}
 		return nil, fmt.Errorf("insert project: %w", err)
 	}
 	return p, nil
@@ -103,6 +110,9 @@ func (r *Repository) Update(ctx context.Context, id uuid.UUID, name, slug string
 		return nil, ErrNotFound
 	}
 	if err != nil {
+		if pgerr.IsUniqueViolation(err, "uq_projects_org_slug") {
+			return nil, ErrSlugTaken
+		}
 		return nil, err
 	}
 	return &p, nil

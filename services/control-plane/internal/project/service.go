@@ -57,16 +57,11 @@ func (s *Service) CreateProject(ctx context.Context, req *controlv1.CreateProjec
 		return nil, status.Error(codes.PermissionDenied, "not a member of this organization")
 	}
 
-	exists, err := s.repo.ExistsByOrgAndSlug(ctx, orgID, slug)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to check slug")
-	}
-	if exists {
-		return nil, status.Error(codes.AlreadyExists, "project slug already exists in this organization")
-	}
-
 	p, err := s.repo.Create(ctx, orgID, name, slug)
 	if err != nil {
+		if errors.Is(err, ErrSlugTaken) {
+			return nil, status.Error(codes.AlreadyExists, "project slug already exists in this organization")
+		}
 		return nil, status.Error(codes.Internal, "failed to create project")
 	}
 	return toProto(p), nil
@@ -184,24 +179,17 @@ func (s *Service) UpdateProject(ctx context.Context, req *controlv1.UpdateProjec
 		return nil, status.Error(codes.InvalidArgument, "slug must be lowercase alphanumeric with hyphens")
 	}
 
-	if slug != "" && slug != p.Slug {
-		exists, err := s.repo.ExistsByOrgAndSlug(ctx, p.OrgID, slug)
-		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to check slug")
-		}
-		if exists {
-			return nil, status.Error(codes.AlreadyExists, "project slug already exists in this organization")
-		}
-	}
-
 	updated, err := s.repo.Update(ctx, projectID, name, slug)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
+		switch {
+		case errors.Is(err, ErrNotFound):
 			return nil, status.Error(codes.NotFound, "project not found")
+		case errors.Is(err, ErrSlugTaken):
+			return nil, status.Error(codes.AlreadyExists, "project slug already exists in this organization")
+		default:
+			return nil, status.Error(codes.Internal, "failed to update project")
 		}
-		return nil, status.Error(codes.Internal, "failed to update project")
 	}
-
 	return toProto(updated), nil
 }
 

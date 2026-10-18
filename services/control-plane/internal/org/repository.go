@@ -6,12 +6,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/DoMinhHHung/pizza/services/control-plane/internal/pgerr"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound      = errors.New("not found")
+	ErrSlugTaken     = errors.New("slug already taken")
+	ErrAlreadyMember = errors.New("user is already a member")
+	ErrLastOwner     = errors.New("organization must keep at least one owner")
+)
 
 type Repository struct {
 	pool *pgxpool.Pool
@@ -42,6 +48,9 @@ func (r *Repository) Create(ctx context.Context, name, slug string, ownerID uuid
 		org.ID, org.Name, org.Slug, org.CreatedAt, org.UpdatedAt,
 	)
 	if err != nil {
+		if pgerr.IsUniqueViolation(err, "uq_organizations_slug") {
+			return nil, ErrSlugTaken
+		}
 		return nil, fmt.Errorf("insert organization: %w", err)
 	}
 
@@ -156,6 +165,10 @@ func (r *Repository) AddMember(ctx context.Context, orgID, userID uuid.UUID, rol
 		m.OrgID, m.UserID, m.Role, m.CreatedAt,
 	)
 	if err != nil {
+		if pgerr.IsUniqueViolation(err, "organization_members_pkey") ||
+			pgerr.IsUniqueViolation(err, "") {
+			return nil, ErrAlreadyMember
+		}
 		return nil, err
 	}
 	return m, nil
@@ -229,6 +242,9 @@ func (r *Repository) Update(ctx context.Context, orgID uuid.UUID, name, slug str
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
+		if pgerr.IsUniqueViolation(err, "uq_organizations_slug") {
+			return nil, ErrSlugTaken
+		}
 		return nil, err
 	}
 	return &o, nil
@@ -244,4 +260,108 @@ func (r *Repository) Delete(ctx context.Context, orgID uuid.UUID) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func lockOrganization(ctx context.Context, tx pgx.Tx, orgID uuid.UUID) error {
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `
+		SELECT id FROM control_plane.organizations WHERE id = $1 FOR UPDATE`, orgID,
+	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
+func memberRoleTx(ctx context.Context, tx pgx.Tx, orgID, userID uuid.UUID) (Role, error) {
+	var role Role
+	err := tx.QueryRow(ctx, `
+		SELECT role FROM control_plane.organization_members
+		WHERE org_id = $1 AND user_id = $2`, orgID, userID,
+	).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return role, err
+}
+
+func countOwnersTx(ctx context.Context, tx pgx.Tx, orgID uuid.UUID) (int, error) {
+	var n int
+	err := tx.QueryRow(ctx, `
+		SELECT COUNT(*) FROM control_plane.organization_members
+		WHERE org_id = $1 AND role = $2`, orgID, RoleOwner,
+	).Scan(&n)
+	return n, err
+}
+
+func (r *Repository) UpdateMemberRoleGuarded(ctx context.Context, orgID, userID uuid.UUID, newRole Role) (*Member, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if err := lockOrganization(ctx, tx, orgID); err != nil {
+		return nil, err
+	}
+	current, err := memberRoleTx(ctx, tx, orgID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if current == RoleOwner && newRole != RoleOwner {
+		owners, err := countOwnersTx(ctx, tx, orgID)
+		if err != nil {
+			return nil, err
+		}
+		if owners <= 1 {
+			return nil, ErrLastOwner
+		}
+	}
+
+	var m Member
+	err = tx.QueryRow(ctx, `
+		UPDATE control_plane.organization_members
+		SET role = $3
+		WHERE org_id = $1 AND user_id = $2
+		RETURNING org_id, user_id, role, created_at`,
+		orgID, userID, newRole,
+	).Scan(&m.OrgID, &m.UserID, &m.Role, &m.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+	return &m, nil
+}
+
+func (r *Repository) RemoveMemberGuarded(ctx context.Context, orgID, userID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if err := lockOrganization(ctx, tx, orgID); err != nil {
+		return err
+	}
+	current, err := memberRoleTx(ctx, tx, orgID, userID)
+	if err != nil {
+		return err
+	}
+	if current == RoleOwner {
+		owners, err := countOwnersTx(ctx, tx, orgID)
+		if err != nil {
+			return err
+		}
+		if owners <= 1 {
+			return ErrLastOwner
+		}
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM control_plane.organization_members
+		WHERE org_id = $1 AND user_id = $2`, orgID, userID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
