@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -15,6 +17,27 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
+
+const maxRequestBodyBytes = 1 << 20
+
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(dst); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"message": "request body too large"})
+			return false
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
+		return false
+	}
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
+		return false
+	}
+	return true
+}
 
 type Server struct {
 	validator *auth.JWTValidator
@@ -94,7 +117,7 @@ func (s *Server) createOrg(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 		Slug string `json:"slug"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON; err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
 		return
 	}
@@ -117,7 +140,7 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 		UserID string `json:"userId"`
 		Role   string `json:"role"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON; err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
 		return
 	}
@@ -133,7 +156,7 @@ func (s *Server) updateMemberRole(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Role string `json:"role"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON; err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
 		return
 	}
@@ -169,7 +192,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 		Slug string `json:"slug"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON; err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
 		return
 	}
@@ -192,7 +215,7 @@ func (s *Server) createApiKey(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name string `json:"name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON; err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
 		return
 	}
@@ -305,7 +328,7 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 		Slug string `json:"slug"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON; err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid json"})
 		return
 	}
@@ -328,11 +351,14 @@ func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func ListenAndServe(addr string, handler http.Handler) error {
-	srv := &http.Server{
+func NewHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
-	return srv.ListenAndServe()
 }

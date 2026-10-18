@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,12 +26,18 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("control-plane exited with error", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	_ = godotenv.Load()
 
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("load config", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -36,25 +45,22 @@ func main() {
 
 	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		slog.Error("connect database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("connect database: %w", err)
 	}
 	defer pool.Close()
 
-	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
+	addr := net.JoinHostPort(cfg.GRPCHost, cfg.GRPCPort)
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		slog.Error("listen grpc", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("listen grpc: %w", err)
 	}
 
 	validator := auth.NewJWTValidator(cfg.JWTSecret)
 
 	orgRepo := org.NewRepository(pool)
 	orgService := org.NewService(orgRepo)
-
 	projectRepo := project.NewRepository(pool)
 	projectService := project.NewService(projectRepo, orgRepo)
-
 	apiKeyRepo := apikey.NewRepository(pool)
 	apiKeyService := apikey.NewService(apiKeyRepo, projectRepo, orgRepo)
 
@@ -64,28 +70,58 @@ func main() {
 	controlv1.RegisterOrganizationServiceServer(grpcServer, orgService)
 	controlv1.RegisterProjectServiceServer(grpcServer, projectService)
 	controlv1.RegisterApiKeyServiceServer(grpcServer, apiKeyService)
-	reflection.Register(grpcServer)
+	if cfg.GRPCReflectionEnabled {
+		reflection.Register(grpcServer)
+	}
 
+	api := httpapi.New(validator, orgService, projectService, apiKeyService, pool.Ping)
+	httpServer := httpapi.NewHTTPServer(":"+cfg.HTTPPort, api.Handler())
+
+	serveErr := make(chan error, 2)
 	go func() {
-		slog.Info("gRPC server starting", "port", cfg.GRPCPort)
+		slog.Info("gRPC server starting", "addr", lis.Addr().String())
 		if err := grpcServer.Serve(lis); err != nil {
-			slog.Error("gRPC server failed", "error", err)
-			stop()
+			serveErr <- fmt.Errorf("grpc serve: %w", err)
 		}
 	}()
-
-	httpServer := httpapi.New(validator, orgService, projectService, apiKeyService, pool.Ping)
 	go func() {
-		addr := ":" + cfg.HTTPPort
-		slog.Info("HTTP API starting", "port", cfg.HTTPPort)
-		if err := httpapi.ListenAndServe(addr, httpServer.Handler()); err != nil {
-			slog.Error("HTTP server failed", "error", err)
-			stop()
+		slog.Info("HTTP API starting", "addr", httpServer.Addr)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- fmt.Errorf("http serve: %w", err)
 		}
 	}()
 
-	<-ctx.Done()
-	slog.Info("shutting down")
-	grpcServer.GracefulStop()
+	var runErr error
+	select {
+	case <-ctx.Done():
+		slog.Info("shutdown signal received")
+	case runErr = <-serveErr:
+		slog.Error("server failed", "error", runErr)
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer cancel()
+	shutdown(shutdownCtx, grpcServer, httpServer)
 	slog.Info("server stopped")
+	return runErr
+}
+
+func shutdown(ctx context.Context, grpcServer *grpc.Server, httpServer *http.Server) {
+	grpcDone := make(chan struct{})
+	go func() {
+		grpcServer.GracefulStop()
+		close(grpcDone)
+	}()
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		slog.Error("http shutdown", "error", err)
+		_ = httpServer.Close()
+	}
+
+	select {
+	case <-grpcDone:
+	case <-ctx.Done():
+		grpcServer.Stop()
+		<-grpcDone
+	}
 }
