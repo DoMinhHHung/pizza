@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { authApi, type UserResult } from '../api/client'
+import { ApiError, authApi, type UserResult } from '../api/client'
 import { clearTokens, isLoggedIn } from './auth-storage'
 
 type AuthState = {
@@ -40,8 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const me = await authApi.me()
           if (!cancelled) setUser(me)
         }
-      } catch {
-        clearTokens()
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          clearTokens()
+        }
         if (!cancelled) setUser(null)
       } finally {
         if (!cancelled) setLoading(false)

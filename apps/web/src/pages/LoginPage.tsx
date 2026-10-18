@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth-context'
 import { AuthCard } from '../components/AuthCard'
 
 export function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
@@ -18,7 +18,7 @@ export function LoginPage() {
     setError('')
     setPending(true)
     try {
-      const tokens = await authApi.login(email.trim(), password)
+      const tokens = await authApi.login(identifier.trim(), password)
       setTokens(tokens.accessToken, tokens.refreshToken)
       await refreshUser()
       navigate('/app')
@@ -34,14 +34,14 @@ export function LoginPage() {
       {error ? <div className="alert alert-error">{error}</div> : null}
       <form onSubmit={onSubmit}>
         <div className="field">
-          <label htmlFor="email">Email</label>
+          <label htmlFor="identifier">Email or username</label>
           <input
-            id="email"
-            type="email"
-            autoComplete="email"
+            id="identifier"
+            type="text"
+            autoComplete="username"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
           />
         </div>
         <div className="field">

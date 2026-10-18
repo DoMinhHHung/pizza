@@ -4,7 +4,7 @@ import { ApiError, authApi } from '../api/client'
 import { AuthCard } from '../components/AuthCard'
 
 export function ForgotPasswordPage() {
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [pending, setPending] = useState(false)
@@ -15,7 +15,7 @@ export function ForgotPasswordPage() {
     setSuccess('')
     setPending(true)
     try {
-      const res = await authApi.forgotPassword(email.trim())
+      const res = await authApi.forgotPassword(identifier.trim())
       setSuccess(res.message)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Request failed')
@@ -30,13 +30,13 @@ export function ForgotPasswordPage() {
       {success ? <div className="alert alert-success">{success}</div> : null}
       <form onSubmit={onSubmit}>
         <div className="field">
-          <label htmlFor="email">Email</label>
+          <label htmlFor="identifier">Email or username</label>
           <input
-            id="email"
-            type="email"
+            id="identifier"
+            type="text"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
           />
         </div>
         <button className="btn btn-primary" type="submit" disabled={pending}>
