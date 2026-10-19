@@ -4,34 +4,38 @@ import { isLoggedIn } from '../lib/auth-storage'
 export function HomePage() {
   const inSession = isLoggedIn()
   return (
-    <div className="auth-layout">
-      <div className="auth-card" style={{ maxWidth: 480 }}>
-        <div className="brand">
-          <div className="brand-mark">P</div>
-          <div>
-            <div className="brand-text">Pizza</div>
-            <div className="brand-sub">BaaS Console</div>
-          </div>
+    <div className="g-auth-page">
+      <div className="g-bg" aria-hidden="true" />
+      <div className="g-stage">
+        <div className="g-brand">
+          <h1>
+            Pizza
+            <span>Console</span>
+          </h1>
         </div>
-        <h1>Backend infrastructure console</h1>
-        <p className="lead">
-          Sign in against the deployed auth-service. Manage account security now; organizations
-          and API keys follow when the control-plane HTTP gateway is available.
-        </p>
-        <div className="row-actions">
+        <div className="g-simple-card">
+          <h2 className="g-title">Backend infrastructure</h2>
+          <p className="g-lead">
+            Sign in against auth-service. Manage organizations, projects, and API keys via
+            control-plane.
+          </p>
           {inSession ? (
-            <Link className="btn btn-primary" to="/app" style={{ textAlign: 'center' }}>
-              Open console
+            <Link className="g-btn-primary" to="/app" style={{ textDecoration: 'none' }}>
+              Open console →
             </Link>
           ) : (
-            <>
-              <Link className="btn btn-primary" to="/login" style={{ flex: 1, textAlign: 'center' }}>
-                Sign in
+            <div style={{ display: 'grid', gap: 10 }}>
+              <Link className="g-btn-primary" to="/login" style={{ textDecoration: 'none' }}>
+                Sign in →
               </Link>
-              <Link className="btn btn-ghost" to="/register" style={{ flex: 1, textAlign: 'center' }}>
-                Register
+              <Link
+                className="g-link"
+                to="/register"
+                style={{ textAlign: 'center', display: 'block' }}
+              >
+                Create an account
               </Link>
-            </>
+            </div>
           )}
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ApiError, authApi } from '../api/client'
-import { AuthCard } from '../components/AuthCard'
+import { GlassySimpleCard } from '../components/GlassyAuthShell'
 
 export function VerifyEmailPage() {
   const [params] = useSearchParams()
@@ -26,9 +26,7 @@ export function VerifyEmailPage() {
 
   useEffect(() => {
     const t = params.get('token')
-    if (t) {
-      void verify(t)
-    }
+    if (t) void verify(t)
   }, [params])
 
   async function onSubmit(e: FormEvent) {
@@ -37,22 +35,27 @@ export function VerifyEmailPage() {
   }
 
   return (
-    <AuthCard title="Verify email" lead="Confirm your address to activate the account.">
-      {error ? <div className="alert alert-error">{error}</div> : null}
+    <GlassySimpleCard title="Verify email" lead="Confirm your address to activate the account.">
+      {error ? <div className="g-alert g-alert-error">{error}</div> : null}
       {success ? (
-        <div className="alert alert-success">
-          {success} <Link to="/login">Sign in</Link>
+        <div className="g-alert g-alert-success">
+          {success}{' '}
+          <Link className="g-link" to="/login">
+            Sign in
+          </Link>
         </div>
       ) : null}
       <form onSubmit={onSubmit}>
-        <div className="field">
+        <div className="g-field">
           <label htmlFor="token">Verification token</label>
-          <input id="token" required value={token} onChange={(e) => setToken(e.target.value)} />
+          <div className="g-input-row">
+            <input id="token" required value={token} onChange={(e) => setToken(e.target.value)} />
+          </div>
         </div>
-        <button className="btn btn-primary" type="submit" disabled={pending}>
-          {pending ? 'Verifying…' : 'Verify'}
+        <button className="g-btn-primary" type="submit" disabled={pending}>
+          {pending ? 'Verifying…' : 'Verify →'}
         </button>
       </form>
-    </AuthCard>
+    </GlassySimpleCard>
   )
 }

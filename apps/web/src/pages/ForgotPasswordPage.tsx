@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError, authApi } from '../api/client'
-import { AuthCard } from '../components/AuthCard'
+import { GlassySimpleCard, IconMail } from '../components/GlassyAuthShell'
 
 export function ForgotPasswordPage() {
   const [identifier, setIdentifier] = useState('')
@@ -25,27 +25,36 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <AuthCard title="Forgot password" lead="We will email a reset link if the account exists.">
-      {error ? <div className="alert alert-error">{error}</div> : null}
-      {success ? <div className="alert alert-success">{success}</div> : null}
+    <GlassySimpleCard
+      title="Forgot password"
+      lead="We will email a reset link if the account exists."
+    >
+      {error ? <div className="g-alert g-alert-error">{error}</div> : null}
+      {success ? <div className="g-alert g-alert-success">{success}</div> : null}
       <form onSubmit={onSubmit}>
-        <div className="field">
+        <div className="g-field">
           <label htmlFor="identifier">Email or username</label>
-          <input
-            id="identifier"
-            type="text"
-            required
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-          />
+          <div className="g-input-row">
+            <IconMail />
+            <input
+              id="identifier"
+              type="text"
+              required
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="name@domain.com or username"
+            />
+          </div>
         </div>
-        <button className="btn btn-primary" type="submit" disabled={pending}>
-          {pending ? 'Sending…' : 'Send reset link'}
+        <button className="g-btn-primary" type="submit" disabled={pending}>
+          {pending ? 'Sending…' : 'Send reset link →'}
         </button>
       </form>
-      <div className="auth-footer">
-        <Link to="/login">Back to sign in</Link>
-      </div>
-    </AuthCard>
+      <p className="g-footer">
+        <Link className="g-link" to="/login">
+          Back to sign in
+        </Link>
+      </p>
+    </GlassySimpleCard>
   )
 }
