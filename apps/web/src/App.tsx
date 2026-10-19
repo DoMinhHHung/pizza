@@ -17,8 +17,11 @@ function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) {
     return (
-      <div className="auth-layout">
-        <p className="lead">Loading session…</p>
+      <div className="g-auth-page">
+        <div className="g-bg" aria-hidden="true" />
+        <p className="g-lead" style={{ position: 'relative', zIndex: 1 }}>
+          Loading session…
+        </p>
       </div>
     )
   }
