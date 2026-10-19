@@ -93,6 +93,9 @@ func (s *Server) routes() {
 
 	s.mux.Handle("GET /api/v1/orgs", authz(http.HandlerFunc(s.listOrgs)))
 	s.mux.Handle("POST /api/v1/orgs", authz(http.HandlerFunc(s.createOrg)))
+	s.mux.Handle("GET /api/v1/orgs/{orgId}", authz(http.HandlerFunc(s.getOrg)))
+	s.mux.Handle("PATCH /api/v1/orgs/{orgId}", authz(http.HandlerFunc(s.updateOrg)))
+	s.mux.Handle("DELETE /api/v1/orgs/{orgId}", authz(http.HandlerFunc(s.deleteOrg)))
 	s.mux.Handle("GET /api/v1/orgs/{orgId}/members", authz(http.HandlerFunc(s.listMembers)))
 	s.mux.Handle("POST /api/v1/orgs/{orgId}/members", authz(http.HandlerFunc(s.addMember)))
 	s.mux.Handle("PATCH /api/v1/orgs/{orgId}/members/{userId}", authz(http.HandlerFunc(s.updateMemberRole)))
@@ -270,7 +273,7 @@ func (s *Server) writeGRPCError(w http.ResponseWriter, err error) {
 	case codes.AlreadyExists:
 		code = http.StatusConflict
 	case codes.FailedPrecondition:
-		code = http.StatusPreconditionFailed
+		code = http.StatusConflict
 	}
 	writeJSON(w, code, map[string]string{"message": st.Message()})
 }
@@ -309,6 +312,40 @@ func (s *Server) cors(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) getOrg(w http.ResponseWriter, r *http.Request) {
+	resp, err := s.orgs.GetOrganization(r.Context(), &controlv1.GetOrganizationRequest{
+		OrgId: r.PathValue("orgId"),
+	})
+	s.writeProto(w, resp, err)
+}
+
+func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	resp, err := s.orgs.UpdateOrganization(r.Context(), &controlv1.UpdateOrganizationRequest{
+		OrgId: r.PathValue("orgId"),
+		Name:  body.Name,
+		Slug:  body.Slug,
+	})
+	s.writeProto(w, resp, err)
+}
+
+func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
+	_, err := s.orgs.DeleteOrganization(r.Context(), &controlv1.DeleteOrganizationRequest{
+		OrgId: r.PathValue("orgId"),
+	})
+	if err != nil {
+		s.writeGRPCError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) getProject(w http.ResponseWriter, r *http.Request) {
