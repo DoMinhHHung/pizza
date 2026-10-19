@@ -1,38 +1,27 @@
-name: CI — web console
+name: CI Web Console
 
 on:
   push:
-    branches:
-      - main
-      - "pizza/**"
     paths:
-      - "apps/web/**"
-      - ".github/workflows/ci-web.yml"
+      - 'apps/web/**'
+      - '.github/workflows/ci-web.yml'
   pull_request:
     paths:
-      - "apps/web/**"
-      - ".github/workflows/ci-web.yml"
-
-permissions:
-  contents: read
+      - 'apps/web/**'
+      - '.github/workflows/ci-web.yml'
 
 jobs:
-  test-web:
-    name: Typecheck test build
+  web:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/web
-
     steps:
-      - name: Check out source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
