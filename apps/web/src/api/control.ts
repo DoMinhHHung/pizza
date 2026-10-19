@@ -84,11 +84,22 @@ export const controlApi = {
       (r) => r.organizations || [],
     ),
 
+  getOrg: (orgId: string) => controlFetch<Organization>(`/api/v1/orgs/${orgId}`),
+
   createOrg: (name: string, slug: string) =>
     controlFetch<Organization>('/api/v1/orgs', {
       method: 'POST',
       body: JSON.stringify({ name, slug }),
     }),
+
+  updateOrg: (orgId: string, name: string, slug: string) =>
+    controlFetch<Organization>(`/api/v1/orgs/${orgId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name, slug }),
+    }),
+
+  deleteOrg: (orgId: string) =>
+    controlFetch<void>(`/api/v1/orgs/${orgId}`, { method: 'DELETE' }),
 
   listMembers: (orgId: string) =>
     controlFetch<{ members: Member[] }>(`/api/v1/orgs/${orgId}/members`).then(
@@ -115,11 +126,22 @@ export const controlApi = {
       (r) => r.projects || [],
     ),
 
+  getProject: (projectId: string) => controlFetch<Project>(`/api/v1/projects/${projectId}`),
+
   createProject: (orgId: string, name: string, slug: string) =>
     controlFetch<Project>(`/api/v1/orgs/${orgId}/projects`, {
       method: 'POST',
       body: JSON.stringify({ name, slug }),
     }),
+
+  updateProject: (projectId: string, name: string, slug: string) =>
+    controlFetch<Project>(`/api/v1/projects/${projectId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name, slug }),
+    }),
+
+  deleteProject: (projectId: string) =>
+    controlFetch<void>(`/api/v1/projects/${projectId}`, { method: 'DELETE' }),
 
   listApiKeys: (projectId: string) =>
     controlFetch<{ apiKeys: ApiKey[] }>(`/api/v1/projects/${projectId}/api-keys`).then(
