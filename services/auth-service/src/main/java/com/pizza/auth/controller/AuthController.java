@@ -89,7 +89,7 @@ public class AuthController {
 
     @PostMapping("/resend-verification")
     public ResponseEntity<Map<String, String>> resendVerification(@Valid @RequestBody ForgotPasswordRequest request) {
-        userService.resendVerification(request.getEmail());
+        userService.resendVerification(request.getIdentifier());
         return ResponseEntity
                 .ok(Map.of("message", "If the email exists and is not verified, a verification link has been sent"));
     }

@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package control.v1;
+
+option go_package = "github.com/DoMinhHHung/pizza/services/control-plane/api/gen/control/v1;controlv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+service ProjectService {
+  rpc CreateProject(CreateProjectRequest) returns (Project);
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc GetProject(GetProjectRequest) returns (Project);
+  rpc UpdateProject(UpdateProjectRequest) returns (Project);
+  rpc DeleteProject(DeleteProjectRequest) returns (google.protobuf.Empty);
+}
+
+message CreateProjectRequest {
+  string org_id = 1;
+  string name = 2;
+  string slug = 3;
+}
+
+message ListProjectsRequest {
+  string org_id = 1;
+}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message GetProjectRequest {
+  string project_id = 1;
+}
+
+message UpdateProjectRequest {
+  string project_id = 1;
+  string name = 2;
+  string slug = 3;
+}
+
+message DeleteProjectRequest {
+  string project_id = 1;
+}
+
+message Project {
+  string id = 1;
+  string org_id = 2;
+  string name = 3;
+  string slug = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
