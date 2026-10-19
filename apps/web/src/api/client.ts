@@ -136,6 +136,13 @@ export type UserResult = {
   createdAt: string
 }
 
+export type UserLookupResult = {
+  id: string
+  email: string
+  username?: string
+  fullName: string
+}
+
 export const authApi = {
   register: (data: RegisterPayload) =>
     authFetch<RegisterResult>('/api/v1/auth/register', {
@@ -195,6 +202,11 @@ export const authApi = {
       method: 'POST',
       auth: true,
       body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  lookup: (q: string) =>
+    authFetch<UserLookupResult>(`/api/v1/users/lookup?q=${encodeURIComponent(q)}`, {
+      auth: true,
     }),
 
   health: () => authFetch<{ status: string }>('/actuator/health'),
