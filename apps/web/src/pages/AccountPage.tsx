@@ -44,6 +44,14 @@ export function AccountPage() {
             <span>{user?.email}</span>
           </div>
           <div className="meta-row">
+            <span className="meta-label">Username</span>
+            <span>{user?.username || '—'}</span>
+          </div>
+          <div className="meta-row">
+            <span className="meta-label">Status</span>
+            <span className="badge badge-muted">{user?.status}</span>
+          </div>
+          <div className="meta-row">
             <span className="meta-label">Verified at</span>
             <span className="meta-value">
               {user?.emailVerifiedAt
