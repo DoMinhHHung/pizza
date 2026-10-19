@@ -14,7 +14,7 @@ export function HomePage() {
           </h1>
         </div>
         <div className="g-simple-card">
-          <h2 className="g-title">Backend infrastructure</h2>
+          <h2 className="g-title">Backend infrastructure console</h2>
           <p className="g-lead">
             Sign in against auth-service. Manage organizations, projects, and API keys via
             control-plane.
@@ -29,9 +29,9 @@ export function HomePage() {
                 Sign in →
               </Link>
               <Link
-                className="g-link"
                 to="/register"
-                style={{ textAlign: 'center', display: 'block' }}
+                className="g-link"
+                style={{ textAlign: 'center', display: 'block', marginTop: 8 }}
               >
                 Create an account
               </Link>
