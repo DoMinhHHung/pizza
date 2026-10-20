@@ -2,9 +2,11 @@ package com.pizza.auth.security;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
+import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAPublicKeySpec;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
@@ -123,10 +125,16 @@ public class JwtService {
 
     private static RSAPublicKey derivePublicKey(RSAPrivateKey privateKey) {
         try {
-            var spec = new java.security.spec.RSAPublicKeySpec(
-                    privateKey.getModulus(),
-                    privateKey.getPublicExponent());
+            if (!(privateKey instanceof RSAPrivateCrtKey crt)) {
+                throw new IllegalStateException(
+                        "Private key is not RSAPrivateCrtKey; cannot derive public key");
+            }
+            RSAPublicKeySpec spec = new RSAPublicKeySpec(
+                    crt.getModulus(),
+                    crt.getPublicExponent());
             return (RSAPublicKey) KeyFactory.getInstance("RSA").generatePublic(spec);
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to derive RSA public key", e);
         }
