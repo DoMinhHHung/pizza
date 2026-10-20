@@ -121,7 +121,11 @@ button,input{font:inherit}
 .g-input-row input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:.92rem;padding:11px 0;min-width:0}
 .g-input-row input::placeholder{color:rgba(148,163,184,.5)}
 .g-toggle-pw{background:none;border:none;color:var(--text-muted);padding:4px;cursor:pointer}
-.g-row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g-row-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.g-row-2 .g-field{min-width:0}
+.g-hint{margin:-6px 0 14px;font-size:.78rem}
+.g-hint-error{color:var(--danger)}
+.g-hint-ok{color:var(--success)}
 @media (max-width:360px){.g-row-2{grid-template-columns:1fr}}
 .g-row-between{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 16px;flex-wrap:wrap}
 .g-link{color:var(--cyan-bright);font-size:.8rem;background:none;border:none;cursor:pointer;font-family:inherit;padding:0}

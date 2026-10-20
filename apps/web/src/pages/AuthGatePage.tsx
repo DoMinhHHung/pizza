@@ -115,6 +115,8 @@ export function AuthGatePage() {
           onPasswordChange={setRegPassword}
           onConfirmChange={setConfirm}
           onSubmit={onSignUp}
+          onTogglePassword={() => setShowPassword((v) => !v)}
+          showPassword={showPassword}
         />
       }
     />

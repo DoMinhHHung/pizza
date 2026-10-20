@@ -44,4 +44,6 @@ jobs:
           cache-dependency-path: services/auth-service/pom.xml
 
       - name: Build and run tests
+        env:
+          DOCKER_API_VERSION: "1.44"
         run: ./mvnw -B clean verify

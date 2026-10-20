@@ -1,22 +1,24 @@
-import { FormEvent } from 'react'
-import { IconAt, IconLock, IconMail, IconUser } from '../GlassyAuthShell'
+import { FormEvent } from "react";
+import { IconAt, IconLock, IconMail, IconUser } from "../GlassyAuthShell";
 
 type Props = {
-  fullName: string
-  username: string
-  email: string
-  password: string
-  confirm: string
-  error: string
-  success: string
-  pending: boolean
-  onFullNameChange: (v: string) => void
-  onUsernameChange: (v: string) => void
-  onEmailChange: (v: string) => void
-  onPasswordChange: (v: string) => void
-  onConfirmChange: (v: string) => void
-  onSubmit: (e: FormEvent) => void
-}
+  fullName: string;
+  username: string;
+  email: string;
+  password: string;
+  confirm: string;
+  showPassword: boolean;
+  error: string;
+  success: string;
+  pending: boolean;
+  onFullNameChange: (v: string) => void;
+  onUsernameChange: (v: string) => void;
+  onEmailChange: (v: string) => void;
+  onPasswordChange: (v: string) => void;
+  onConfirmChange: (v: string) => void;
+  onTogglePassword: () => void;
+  onSubmit: (e: FormEvent) => void;
+};
 
 export function SignUpForm({
   fullName,
@@ -24,6 +26,7 @@ export function SignUpForm({
   email,
   password,
   confirm,
+  showPassword,
   error,
   success,
   pending,
@@ -32,14 +35,21 @@ export function SignUpForm({
   onEmailChange,
   onPasswordChange,
   onConfirmChange,
+  onTogglePassword,
   onSubmit,
 }: Props) {
+  const mismatch = confirm.length > 0 && password !== confirm;
+  const matched = confirm.length > 0 && password === confirm;
+  const inputType = showPassword ? "text" : "password";
+  const toggleLabel = showPassword ? "Hide passwords" : "Show passwords";
   return (
     <>
       <h2 className="g-title">Create Account</h2>
       <p className="g-lead">Join Pizza to manage organizations and API keys</p>
       {error ? <div className="g-alert g-alert-error">{error}</div> : null}
-      {success ? <div className="g-alert g-alert-success">{success}</div> : null}
+      {success ? (
+        <div className="g-alert g-alert-success">{success}</div>
+      ) : null}
       <form onSubmit={onSubmit}>
         <div className="g-field">
           <label htmlFor="su-name">Full name</label>
@@ -104,6 +114,15 @@ export function SignUpForm({
                 value={password}
                 onChange={(e) => onPasswordChange(e.target.value)}
               />
+              <button
+                type="button"
+                className="g-toggle-pw"
+                aria-label={toggleLabel}
+                aria-pressed={showPassword}
+                onClick={onTogglePassword}
+              >
+                👁
+              </button>
             </div>
           </div>
           <div className="g-field">
@@ -120,13 +139,43 @@ export function SignUpForm({
                 value={confirm}
                 onChange={(e) => onConfirmChange(e.target.value)}
               />
+              <button
+                type="button"
+                className="g-toggle-pw"
+                aria-label={toggleLabel}
+                aria-pressed={showPassword}
+                onClick={onTogglePassword}
+              >
+                👁
+              </button>
             </div>
           </div>
         </div>
-        <button className="g-btn-primary" type="submit" disabled={pending}>
-          {pending ? 'Creating…' : 'Create Account →'}
+        <p
+          id="su-confirm-hint"
+          aria-live="polite"
+          className={
+            mismatch
+              ? "g-hint g-hint-error"
+              : matched
+                ? "g-hint g-hint-ok"
+                : "g-hint"
+          }
+        >
+          {mismatch
+            ? "Passwords do not match"
+            : matched
+              ? "Passwords match"
+              : ""}
+        </p>
+        <button
+          className="g-btn-primary"
+          type="submit"
+          disabled={pending || mismatch}
+        >
+          {pending ? "Creating…" : "Create Account →"}
         </button>
       </form>
     </>
-  )
+  );
 }
