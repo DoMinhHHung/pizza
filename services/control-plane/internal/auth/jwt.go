@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"strings"
@@ -23,6 +24,8 @@ import (
 type contextKey string
 
 const UserIDKey contextKey = "userID"
+
+const maxJWKSBody = 1 << 20 // 1 MiB
 
 type Claims struct {
 	Email  string `json:"email"`
@@ -49,9 +52,13 @@ type JWTValidator struct {
 	cacheTTL time.Duration
 	client   *http.Client
 
-	mu        sync.RWMutex
-	keys      map[string]*rsa.PublicKey
-	fetchedAt time.Time
+	mu            sync.Mutex
+	keys          map[string]*rsa.PublicKey
+	fetchedAt     time.Time
+	refreshing    bool
+	waiters       []chan error
+	lastForceAt   time.Time
+	forceCooldown time.Duration
 }
 
 func NewJWTValidator(jwksURL string, cacheTTL time.Duration) *JWTValidator {
@@ -59,18 +66,20 @@ func NewJWTValidator(jwksURL string, cacheTTL time.Duration) *JWTValidator {
 		cacheTTL = 5 * time.Minute
 	}
 	return &JWTValidator{
-		jwksURL:  jwksURL,
-		cacheTTL: cacheTTL,
-		client:   &http.Client{Timeout: 5 * time.Second},
-		keys:     make(map[string]*rsa.PublicKey),
+		jwksURL:       jwksURL,
+		cacheTTL:      cacheTTL,
+		client:        &http.Client{Timeout: 5 * time.Second},
+		keys:          make(map[string]*rsa.PublicKey),
+		forceCooldown: 30 * time.Second,
 	}
 }
 
 func NewJWTValidatorWithKeys(keys map[string]*rsa.PublicKey) *JWTValidator {
 	return &JWTValidator{
-		cacheTTL:  time.Hour,
-		keys:      keys,
-		fetchedAt: time.Now(),
+		cacheTTL:      time.Hour,
+		keys:          keys,
+		fetchedAt:     time.Now(),
+		forceCooldown: 30 * time.Second,
 	}
 }
 
@@ -128,7 +137,7 @@ func (v *JWTValidator) ParseAccessToken(raw string) (uuid.UUID, error) {
 	if err != nil || !token.Valid {
 		return uuid.Nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
-	if claims.Type != "" && claims.Type != "access" {
+	if claims.Type != "access" {
 		return uuid.Nil, status.Error(codes.Unauthenticated, "not an access token")
 	}
 	userID, err := uuid.Parse(claims.Subject)
@@ -139,45 +148,96 @@ func (v *JWTValidator) ParseAccessToken(raw string) (uuid.UUID, error) {
 }
 
 func (v *JWTValidator) publicKey(kid string) (*rsa.PublicKey, error) {
-	if err := v.ensureKeys(); err != nil {
+	if err := v.ensureKeys(false); err != nil {
 		return nil, err
 	}
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-	if kid != "" {
-		if k, ok := v.keys[kid]; ok {
-			return k, nil
-		}
+
+	v.mu.Lock()
+	k, ok := v.lookupLocked(kid)
+	v.mu.Unlock()
+	if ok {
+		return k, nil
+	}
+
+	if err := v.ensureKeys(true); err != nil {
+		return nil, err
+	}
+	v.mu.Lock()
+	k, ok = v.lookupLocked(kid)
+	v.mu.Unlock()
+	if !ok {
 		return nil, fmt.Errorf("unknown kid %q", kid)
+	}
+	return k, nil
+}
+
+func (v *JWTValidator) lookupLocked(kid string) (*rsa.PublicKey, bool) {
+	if kid != "" {
+		k, ok := v.keys[kid]
+		return k, ok
 	}
 	if len(v.keys) == 1 {
 		for _, k := range v.keys {
-			return k, nil
+			return k, true
 		}
 	}
-	return nil, fmt.Errorf("missing kid and multiple keys")
+	return nil, false
 }
 
-func (v *JWTValidator) ensureKeys() error {
-	v.mu.RLock()
+func (v *JWTValidator) ensureKeys(force bool) error {
+	v.mu.Lock()
+
 	fresh := len(v.keys) > 0 && time.Since(v.fetchedAt) < v.cacheTTL
-	v.mu.RUnlock()
-	if fresh {
+	if force {
+		if time.Since(v.lastForceAt) < v.forceCooldown && len(v.keys) > 0 {
+			v.mu.Unlock()
+			return nil
+		}
+	} else if fresh {
+		v.mu.Unlock()
 		return nil
 	}
-	return v.refreshKeys()
-}
 
-func (v *JWTValidator) refreshKeys() error {
 	if v.jwksURL == "" {
-		v.mu.RLock()
 		ok := len(v.keys) > 0
-		v.mu.RUnlock()
+		v.mu.Unlock()
 		if ok {
 			return nil
 		}
 		return fmt.Errorf("jwks url not configured")
 	}
+
+	if v.refreshing {
+		ch := make(chan error, 1)
+		v.waiters = append(v.waiters, ch)
+		v.mu.Unlock()
+		return <-ch
+	}
+
+	v.refreshing = true
+	if force {
+		v.lastForceAt = time.Now()
+	}
+	v.mu.Unlock()
+
+	err := v.doRefresh()
+
+	v.mu.Lock()
+	v.refreshing = false
+	waiters := v.waiters
+	v.waiters = nil
+	if err != nil && len(v.keys) > 0 {
+		err = nil
+	}
+	v.mu.Unlock()
+
+	for _, ch := range waiters {
+		ch <- err
+	}
+	return err
+}
+
+func (v *JWTValidator) doRefresh() error {
 	resp, err := v.client.Get(v.jwksURL)
 	if err != nil {
 		return fmt.Errorf("fetch jwks: %w", err)
@@ -186,10 +246,13 @@ func (v *JWTValidator) refreshKeys() error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("jwks status %d", resp.StatusCode)
 	}
+
+	limited := io.LimitReader(resp.Body, maxJWKSBody)
 	var doc jwksDocument
-	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+	if err := json.NewDecoder(limited).Decode(&doc); err != nil {
 		return fmt.Errorf("decode jwks: %w", err)
 	}
+
 	next := make(map[string]*rsa.PublicKey)
 	for _, k := range doc.Keys {
 		if k.Kty != "RSA" || k.N == "" || k.E == "" {
@@ -197,7 +260,7 @@ func (v *JWTValidator) refreshKeys() error {
 		}
 		pub, err := rsaPublicFromJWK(k.N, k.E)
 		if err != nil {
-			return err
+			continue
 		}
 		kid := k.Kid
 		if kid == "" {
@@ -208,6 +271,7 @@ func (v *JWTValidator) refreshKeys() error {
 	if len(next) == 0 {
 		return fmt.Errorf("jwks has no rsa keys")
 	}
+
 	v.mu.Lock()
 	v.keys = next
 	v.fetchedAt = time.Now()

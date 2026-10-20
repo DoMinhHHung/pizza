@@ -302,4 +302,47 @@ class AuthServiceTest {
         request.setRefreshToken(token);
         return request;
     }
+
+    @Test
+    void logout_expiredAccess_stillRevokesRefresh() {
+        UUID userId = UUID.randomUUID();
+        when(jwtService.getJti("expired-access"))
+                .thenThrow(new io.jsonwebtoken.ExpiredJwtException(null, null, "expired"));
+        when(jwtService.getJti("valid-refresh")).thenReturn("refresh-jti");
+        when(jwtService.getUserId("valid-refresh")).thenReturn(userId);
+        when(jwtService.getExpiration("valid-refresh")).thenReturn(java.time.Instant.now().plusSeconds(3600));
+        doNothing().when(refreshTokenService).revoke(userId, "refresh-jti");
+        doNothing().when(tokenBlacklistService).blacklist(eq("refresh-jti"), any());
+
+        authService.logout("expired-access", "valid-refresh");
+
+        verify(refreshTokenService).revoke(userId, "refresh-jti");
+        verify(tokenBlacklistService).blacklist(eq("refresh-jti"), any());
+        verify(tokenBlacklistService, never()).blacklist(eq("access-jti"), any());
+    }
+
+    @Test
+    void logout_validAccessAndRefresh_blacklistsBoth() {
+        UUID userId = UUID.randomUUID();
+        when(jwtService.getJti("access")).thenReturn("access-jti");
+        when(jwtService.getExpiration("access")).thenReturn(java.time.Instant.now().plusSeconds(900));
+        when(jwtService.getJti("refresh")).thenReturn("refresh-jti");
+        when(jwtService.getUserId("refresh")).thenReturn(userId);
+        when(jwtService.getExpiration("refresh")).thenReturn(java.time.Instant.now().plusSeconds(3600));
+        doNothing().when(tokenBlacklistService).blacklist(anyString(), any());
+        doNothing().when(refreshTokenService).revoke(userId, "refresh-jti");
+
+        authService.logout("access", "refresh");
+
+        verify(tokenBlacklistService).blacklist(eq("access-jti"), any());
+        verify(refreshTokenService).revoke(userId, "refresh-jti");
+        verify(tokenBlacklistService).blacklist(eq("refresh-jti"), any());
+    }
+
+    @Test
+    void logout_nullTokens_noOp() {
+        authService.logout(null, null);
+        verify(refreshTokenService, never()).revoke(any(), anyString());
+        verify(tokenBlacklistService, never()).blacklist(anyString(), any());
+    }
 }

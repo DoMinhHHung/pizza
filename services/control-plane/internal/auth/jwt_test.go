@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -259,5 +262,78 @@ func TestMiddleware_Unauthorized(t *testing.T) {
 	v.Middleware(next).ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d", rr.Code)
+	}
+}
+
+func TestParseAccessToken_RejectMissingType(t *testing.T) {
+	priv, pub := testKeyPair(t)
+	v := validatorFor(pub, "k1")
+	raw := signRS256(t, priv, "k1", &Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   uuid.New().String(),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+	_, err := v.ParseAccessToken("Bearer " + raw)
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("want Unauthenticated, got %v", err)
+	}
+}
+
+func TestJWKS_UnknownKidTriggersRefresh(t *testing.T) {
+	priv1, pub1 := testKeyPair(t)
+	priv2, pub2 := testKeyPair(t)
+
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		var kid string
+		var pub *rsa.PublicKey
+		if hits == 1 {
+			kid, pub = "old", pub1
+		} else {
+			kid, pub = "new", pub2
+		}
+		n := base64.RawURLEncoding.EncodeToString(pub.N.Bytes())
+		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes())
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"keys": []map[string]string{{
+				"kty": "RSA", "kid": kid, "alg": "RS256", "n": n, "e": e,
+			}},
+		})
+	}))
+	defer srv.Close()
+
+	v := NewJWTValidator(srv.URL, time.Hour)
+	userID := uuid.New()
+
+	rawOld := signRS256(t, priv1, "old", &Claims{
+		Type: "access",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID.String(),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+	if _, err := v.ParseAccessToken("Bearer " + rawOld); err != nil {
+		t.Fatalf("old token: %v", err)
+	}
+
+	// Force cooldown reset so second refresh is allowed in test
+	v.mu.Lock()
+	v.lastForceAt = time.Time{}
+	v.mu.Unlock()
+
+	rawNew := signRS256(t, priv2, "new", &Claims{
+		Type: "access",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID.String(),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+	if _, err := v.ParseAccessToken("Bearer " + rawNew); err != nil {
+		t.Fatalf("new token after rotation: %v", err)
+	}
+	if hits < 2 {
+		t.Fatalf("expected JWKS refresh, hits=%d", hits)
 	}
 }
