@@ -55,7 +55,7 @@ func run() error {
 		return fmt.Errorf("listen grpc: %w", err)
 	}
 
-	validator := auth.NewJWTValidator(cfg.JWTSecret)
+	validator := auth.NewJWTValidator(cfg.JWTJWKSURL, cfg.JWKSCacheTTL)
 
 	orgRepo := org.NewRepository(pool)
 	orgService := org.NewService(orgRepo)
