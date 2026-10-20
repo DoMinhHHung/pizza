@@ -106,7 +106,7 @@ export function SignUpForm({
               <IconLock />
               <input
                 id="su-password"
-                type="password"
+                type={inputType}
                 autoComplete="new-password"
                 required
                 minLength={8}
@@ -131,7 +131,7 @@ export function SignUpForm({
               <IconLock />
               <input
                 id="su-confirm"
-                type="password"
+                type={inputType}
                 autoComplete="new-password"
                 required
                 minLength={8}
