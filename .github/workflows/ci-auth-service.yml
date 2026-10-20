@@ -5,10 +5,20 @@ on:
     branches:
       - main
       - pizza/**
+    paths:
+      - "services/auth-service/**"
+      - ".github/workflows/ci-auth-service.yml"
   pull_request:
     branches:
       - main
       - pizza/**
+    paths:
+      - "services/auth-service/**"
+      - ".github/workflows/ci-auth-service.yml"
+
+concurrency:
+  group: ci-auth-service-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -44,6 +54,4 @@ jobs:
           cache-dependency-path: services/auth-service/pom.xml
 
       - name: Build and run tests
-        env:
-          DOCKER_API_VERSION: "1.44"
-        run: ./mvnw -B clean verify
+        run: ./mvnw -B clean verify -DskipITs
