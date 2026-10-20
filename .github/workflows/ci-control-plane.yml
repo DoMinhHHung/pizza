@@ -46,7 +46,6 @@ jobs:
 
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/pizza_control_test?sslmode=disable
-      JWT_SECRET: ci-test-secret-at-least-32-characters-long
 
     steps:
       - name: Check out source

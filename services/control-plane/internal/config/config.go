@@ -7,8 +7,6 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
-const minJWTSecretLength = 32
-
 type Config struct {
 	HTTPPort string `env:"HTTP_PORT" envDefault:"8081"`
 	GRPCPort string `env:"GRPC_PORT" envDefault:"9090"`
@@ -17,7 +15,10 @@ type Config struct {
 	GRPCReflectionEnabled bool `env:"GRPC_REFLECTION_ENABLED" envDefault:"false"`
 
 	DatabaseURL string `env:"DATABASE_URL,required"`
-	JWTSecret   string `env:"JWT_SECRET,required"`
+
+	JWTJWKSURL string `env:"JWT_JWKS_URL,required"`
+
+	JWKSCacheTTL time.Duration `env:"JWKS_CACHE_TTL" envDefault:"5m"`
 
 	CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
 
@@ -29,8 +30,8 @@ func Load() (*Config, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return nil, err
 	}
-	if len(cfg.JWTSecret) < minJWTSecretLength {
-		return nil, fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLength)
+	if cfg.JWTJWKSURL == "" {
+		return nil, fmt.Errorf("JWT_JWKS_URL is required")
 	}
 	return &cfg, nil
 }

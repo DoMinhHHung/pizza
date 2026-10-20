@@ -65,6 +65,10 @@ public class SecurityConfig {
                                 .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthenticationEntryPoint))
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers(
+                                                                "/.well-known/jwks.json",
+                                                                "/api/v1/auth/.well-known/jwks.json")
+                                                .permitAll()
+                                                .requestMatchers(
                                                                 "/swagger-ui.html",
                                                                 "/swagger-ui/**",
                                                                 "/v3/api-docs",

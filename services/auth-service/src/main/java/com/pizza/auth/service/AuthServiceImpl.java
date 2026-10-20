@@ -145,18 +145,23 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void logout(String accessToken, String refreshToken) {
-        try {
-            if (accessToken != null && !accessToken.isBlank()) {
+        if (accessToken != null && !accessToken.isBlank()) {
+            try {
                 String accessJti = jwtService.getJti(accessToken);
                 tokenBlacklistService.blacklist(accessJti, jwtService.getExpiration(accessToken));
+            } catch (JwtException | IllegalArgumentException ignored) {
+                // Access expired/invalid: still try to revoke refresh below
             }
-            if (refreshToken != null && !refreshToken.isBlank()) {
+        }
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            try {
                 String refreshJti = jwtService.getJti(refreshToken);
                 UUID userId = jwtService.getUserId(refreshToken);
                 refreshTokenService.revoke(userId, refreshJti);
                 tokenBlacklistService.blacklist(refreshJti, jwtService.getExpiration(refreshToken));
+            } catch (JwtException | IllegalArgumentException ignored) {
+                // Refresh invalid/expired: nothing left to revoke
             }
-        } catch (JwtException | IllegalArgumentException ex) {
         }
     }
 
