@@ -211,3 +211,20 @@ func toProto(k *ApiKey) *controlv1.ApiKey {
 	}
 	return out
 }
+
+func (s *Service) VerifySecret(ctx context.Context, raw string) (*ApiKey, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || !strings.HasPrefix(raw, "pk_live_") {
+		return nil, ErrNotFound
+	}
+	sum := sha256.Sum256([]byte(raw))
+	hash := hex.EncodeToString(sum[:])
+	key, err := s.repo.FindActiveByHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.repo.TouchLastUsed(ctx, key.ID)
+	now := time.Now().UTC()
+	key.LastUsedAt = &now
+	return key, nil
+}

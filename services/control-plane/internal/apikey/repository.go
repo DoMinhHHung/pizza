@@ -105,3 +105,11 @@ func (r *Repository) FindActiveByHash(ctx context.Context, hash string) (*ApiKey
 	}
 	return &k, nil
 }
+
+func (r *Repository) TouchLastUsed(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE control_plane.api_keys
+		SET last_used_at = $2
+		WHERE id = $1 AND revoked_at IS NULL`, id, time.Now().UTC())
+	return err
+}
