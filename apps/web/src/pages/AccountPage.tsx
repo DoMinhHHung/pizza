@@ -30,18 +30,26 @@ export function AccountPage() {
 
   return (
     <div>
-      <h1 style={{ marginBottom: 8 }}>Account</h1>
-      <p className="lead">Profile and password</p>
+      <div className="page-header">
+        <h1 className="page-title">Account</h1>
+        <p className="page-desc">Your profile information and password settings.</p>
+      </div>
       <div className="grid-2">
         <div className="card">
-          <h2>Profile</h2>
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+            </svg>
+            Profile
+          </h2>
           <div className="meta-row">
             <span className="meta-label">Full name</span>
             <span>{user?.fullName}</span>
           </div>
           <div className="meta-row">
             <span className="meta-label">Email</span>
-            <span>{user?.email}</span>
+            <span className="meta-value">{user?.email}</span>
           </div>
           <div className="meta-row">
             <span className="meta-label">Username</span>
@@ -67,7 +75,13 @@ export function AccountPage() {
           </div>
         </div>
         <div className="card">
-          <h2>Change password</h2>
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            Change password
+          </h2>
           <p className="card-desc">POST /api/v1/auth/change-password</p>
           {error ? <div className="alert alert-error">{error}</div> : null}
           {success ? <div className="alert alert-success">{success}</div> : null}

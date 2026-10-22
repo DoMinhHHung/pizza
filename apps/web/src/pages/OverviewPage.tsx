@@ -16,14 +16,25 @@ export function OverviewPage() {
 
   return (
     <div>
-      <h1 style={{ marginBottom: 8 }}>Overview</h1>
-      <p className="lead" style={{ marginBottom: 24 }}>
-        Auth session is live. Manage <Link to="/app/orgs">organizations</Link> via control-plane HTTP
-        API.
-      </p>
+      <div className="page-header">
+        <h1 className="page-title">Overview</h1>
+        <p className="page-desc">
+          Your session is live. Manage{' '}
+          <Link to="/app/orgs" style={{ color: 'var(--accent-hover)' }}>
+            organizations
+          </Link>{' '}
+          via the control-plane API.
+        </p>
+      </div>
       <div className="grid-2">
-        <div className="card">
-          <h2>Session</h2>
+        <div className="card card-accent">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+            </svg>
+            Session
+          </h2>
           <p className="card-desc">GET /api/v1/auth/me</p>
           <div className="meta-row">
             <span className="meta-label">Name</span>
@@ -45,7 +56,13 @@ export function OverviewPage() {
           </div>
         </div>
         <div className="card">
-          <h2>Services</h2>
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+            Services
+          </h2>
+          <p className="card-desc">Backend connectivity</p>
           <div className="meta-row">
             <span className="meta-label">Auth health</span>
             <span className={health === 'UP' ? 'badge badge-ok' : 'badge badge-warn'}>{health}</span>

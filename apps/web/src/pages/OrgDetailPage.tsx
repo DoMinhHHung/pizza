@@ -211,14 +211,16 @@ export function OrgDetailPage() {
   return (
     <div className="stack">
       <div>
-        <Link to="/app/orgs" style={{ fontSize: 13 }}>
-          ← Organizations
-        </Link>
-        <h1 style={{ margin: '8px 0 4px', fontSize: 22 }}>
+        <div className="breadcrumb">
+          <Link to="/app/orgs">Organizations</Link>
+          <span className="breadcrumb-sep">/</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{org?.name || 'Organization'}</span>
+        </div>
+        <h1 className="page-title" style={{ marginBottom: 4 }}>
           {org?.name || 'Organization'}
         </h1>
-        <p className="card-desc" style={{ margin: 0 }}>
-          {org?.slug} · your role: <strong>{org?.role}</strong>
+        <p className="page-desc">
+          {org?.slug} · your role: <strong style={{ color: 'var(--text-secondary)' }}>{org?.role}</strong>
         </p>
       </div>
 
@@ -227,7 +229,13 @@ export function OrgDetailPage() {
 
       {isOwner ? (
         <div className="card">
-          <h2>Organization settings</h2>
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Organization settings
+          </h2>
           <form onSubmit={onUpdateOrg} className="stack">
             <div className="field">
               <label htmlFor="org-name">Name</label>
@@ -239,7 +247,7 @@ export function OrgDetailPage() {
             </div>
             <div className="row-actions">
               <button className="btn btn-primary" type="submit">
-                Save
+                Save changes
               </button>
               <button className="btn btn-danger" type="button" onClick={() => void onDeleteOrg()}>
                 Delete organization
@@ -251,10 +259,18 @@ export function OrgDetailPage() {
 
       <div className="grid-2">
         <div className="card">
-          <h2>Members</h2>
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Members
+          </h2>
           <p className="card-desc">Invite by username or email (lookup via auth-service).</p>
           {canManage ? (
-            <form onSubmit={onInvite} className="stack" style={{ marginBottom: 16 }}>
+            <form onSubmit={onInvite} className="stack" style={{ marginBottom: 18 }}>
               <div className="field">
                 <label htmlFor="invite">Username or email</label>
                 <input
@@ -285,7 +301,7 @@ export function OrgDetailPage() {
                   <div className="meta-value" style={{ textAlign: 'left' }}>
                     {m.userId === user?.id ? `${m.userId} (you)` : m.userId}
                   </div>
-                  <span className="badge badge-muted">{m.role}</span>
+                  <span className="badge badge-muted" style={{ marginTop: 4 }}>{m.role}</span>
                 </div>
                 {canManage && m.userId !== user?.id ? (
                   <div className="row-actions">
@@ -307,9 +323,14 @@ export function OrgDetailPage() {
         </div>
 
         <div className="card">
-          <h2>Projects</h2>
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+            Projects
+          </h2>
           {canManage ? (
-            <form onSubmit={onCreateProject} className="stack" style={{ marginBottom: 16 }}>
+            <form onSubmit={onCreateProject} className="stack" style={{ marginBottom: 18 }}>
               <div className="field">
                 <label htmlFor="pname">Name</label>
                 <input id="pname" required value={projectName} onChange={(e) => setProjectName(e.target.value)} />
@@ -329,15 +350,11 @@ export function OrgDetailPage() {
               <button
                 key={p.id}
                 type="button"
-                className="btn btn-ghost"
-                style={{
-                  justifyContent: 'flex-start',
-                  borderColor: selectedProject === p.id ? 'var(--accent)' : undefined,
-                }}
+                className={`project-btn ${selectedProject === p.id ? 'is-selected' : ''}`}
                 onClick={() => setSelectedProject(p.id)}
               >
-                {p.name}{' '}
-                <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{p.slug}</span>
+                <span style={{ fontWeight: 600 }}>{p.name}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{p.slug}</span>
               </button>
             ))}
           </div>
@@ -346,9 +363,14 @@ export function OrgDetailPage() {
 
       {selectedProject ? (
         <div className="card">
-          <h2>Selected project</h2>
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+            Selected project
+          </h2>
           {canManage ? (
-            <form onSubmit={onUpdateProject} className="stack" style={{ marginBottom: 16 }}>
+            <form onSubmit={onUpdateProject} className="stack" style={{ marginBottom: 18 }}>
               <div className="field">
                 <label htmlFor="epname">Name</label>
                 <input
@@ -378,15 +400,20 @@ export function OrgDetailPage() {
             </form>
           ) : null}
 
-          <h2 style={{ marginTop: 8 }}>API keys</h2>
+          <h2 style={{ marginTop: 20 }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 2.5l6 6-3.61 3.61z" />
+            </svg>
+            API keys
+          </h2>
           <p className="card-desc">Secrets are shown only once at creation.</p>
           {lastSecret ? (
             <div className="alert alert-info">
-              Secret: <code style={{ wordBreak: 'break-all' }}>{lastSecret}</code>
+              Secret: <code style={{ wordBreak: 'break-all', fontFamily: 'var(--mono)' }}>{lastSecret}</code>
             </div>
           ) : null}
           {canManage ? (
-            <form onSubmit={onCreateKey} className="stack" style={{ marginBottom: 16 }}>
+            <form onSubmit={onCreateKey} className="stack" style={{ marginBottom: 18 }}>
               <div className="field">
                 <label htmlFor="kname">Key name</label>
                 <input id="kname" required value={keyName} onChange={(e) => setKeyName(e.target.value)} />

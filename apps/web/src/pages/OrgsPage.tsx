@@ -1,5 +1,4 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { controlApi, type Organization } from '../api/control'
 
@@ -44,42 +43,51 @@ export function OrgsPage() {
 
   return (
     <div>
-      <h1 style={{ marginBottom: 8 }}>Organizations</h1>
-      <p className="lead">Create and open an organization to manage members, projects, and API keys.</p>
+      <div className="page-header">
+        <h1 className="page-title">Organizations</h1>
+        <p className="page-desc">
+          Create and open an organization to manage members, projects, and API keys.
+        </p>
+      </div>
+
       {error ? <div className="alert alert-error">{error}</div> : null}
+
       <div className="grid-2">
         <div className="card">
-          <h2>Your organizations</h2>
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 21h18" />
+              <path d="M5 21V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v16" />
+              <path d="M13 21V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v12" />
+            </svg>
+            Your organizations
+          </h2>
           {loading ? (
             <p className="card-desc">Loading…</p>
           ) : orgs.length === 0 ? (
-            <div className="empty">No organizations yet.</div>
+            <div className="empty">No organizations yet. Create one to get started.</div>
           ) : (
             <div className="stack">
               {orgs.map((o) => (
-                <Link
-                  key={o.id}
-                  to={`/app/orgs/${o.id}`}
-                  style={{
-                    display: 'block',
-                    padding: '12px 14px',
-                    borderRadius: 8,
-                    border: '1px solid var(--border)',
-                    color: 'inherit',
-                    background: 'var(--bg-elevated)',
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>{o.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                    {o.slug} · <span className="badge badge-muted">{o.role}</span>
+                <a key={o.id} href={`/app/orgs/${o.id}`} className="org-card-link">
+                  <div className="org-card-link-title">{o.name}</div>
+                  <div className="org-card-link-meta">
+                    {o.slug}
+                    <span className="badge badge-muted">{o.role}</span>
                   </div>
-                </Link>
+                </a>
               ))}
             </div>
           )}
         </div>
         <div className="card">
-          <h2>Create organization</h2>
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Create organization
+          </h2>
           <p className="card-desc">POST /api/v1/orgs — you become OWNER</p>
           <form onSubmit={onCreate} className="stack">
             <div className="field">
@@ -98,7 +106,7 @@ export function OrgsPage() {
               />
             </div>
             <button className="btn btn-primary" type="submit" disabled={pending}>
-              {pending ? 'Creating…' : 'Create'}
+              {pending ? 'Creating…' : 'Create organization'}
             </button>
           </form>
         </div>
